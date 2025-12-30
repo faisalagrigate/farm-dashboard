@@ -47,7 +47,7 @@ export function Sidebar({ activeTab, onTabChange }: SidebarProps) {
           <Leaf className="h-8 w-8 text-green-600" />
           <div>
             <h1 className="text-lg font-semibold text-gray-900">Agrigate</h1>
-            <p className="text-xs text-gray-500">Smart Farm Management - BD</p>
+            <p className="text-xs text-gray-500">Smart Farm Management </p>
           </div>
         </div>
       </div>
