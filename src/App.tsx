@@ -16,10 +16,12 @@ import { Tasks } from './components/pages/Tasks';
 import { Settings } from './components/pages/Settings';
 
 export default function App() {
-  const [activeTab, setActiveTab] = useState('dashboard');
+  const [activeTab, setActiveTab] = useState('poultry');
 
   const renderContent = () => {
     switch (activeTab) {
+       case 'poultry':
+        return <PoultryMonitoring />;
       case 'dashboard':
         return <Dashboard />;
       case 'farms':
@@ -28,8 +30,7 @@ export default function App() {
         return <Crops />;
       case 'livestock':
         return <Livestock />;
-      case 'poultry':
-        return <PoultryMonitoring />;
+     
       case 'equipment':
         return <Equipment />;
       case 'labor':
@@ -49,7 +50,7 @@ export default function App() {
       case 'settings':
         return <Settings />;
       default:
-        return <Dashboard />;
+        return <PoultryMonitoring />;
     }
   };
 

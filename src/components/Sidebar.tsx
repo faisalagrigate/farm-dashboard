@@ -24,16 +24,17 @@ interface SidebarProps {
 
 export function Sidebar({ activeTab, onTabChange }: SidebarProps) {
   const menuItems = [
-    { id: 'dashboard', label: 'Dashboard', icon: LayoutGrid, color: 'text-blue-600' },
+        { id: 'poultry', label: 'Agrigate Poultry AI', icon: Bird, color: 'text-purple-600' },
+
+    // { id: 'dashboard', label: 'Dashboard', icon: LayoutGrid, color: 'text-blue-600' },
     { id: 'farms', label: 'Farms', icon: MapPin, color: 'text-green-600' },
-    { id: 'crops', label: 'Crops & Fields', icon: Wheat, color: 'text-green-500' },
+    // { id: 'crops', label: 'Crops & Fields', icon: Wheat, color: 'text-green-500' },
     { id: 'livestock', label: 'Livestock', icon: Heart, color: 'text-red-500' },
-    { id: 'poultry', label: 'Agrigate Poultry AI', icon: Bird, color: 'text-purple-600' },
     { id: 'equipment', label: 'Equipment', icon: Wrench, color: 'text-orange-600' },
     { id: 'labor', label: 'Labor & Resources', icon: Users, color: 'text-purple-600' },
     { id: 'sales', label: 'Sales & Revenue', icon: DollarSign, color: 'text-green-600' },
     { id: 'iot-devices', label: 'IoT Devices', icon: Cpu, color: 'text-purple-600' },
-    { id: 'irrigation', label: 'Irrigation', icon: Droplets, color: 'text-blue-500' },
+    // { id: 'irrigation', label: 'Irrigation', icon: Droplets, color: 'text-blue-500' },
     { id: 'weather', label: 'Weather', icon: CloudRain, color: 'text-sky-600' },
     { id: 'reports', label: 'Reports & Analytics', icon: BarChart3, color: 'text-indigo-600' },
     { id: 'tasks', label: 'Tasks & Alerts', icon: CheckSquare, color: 'text-orange-600' },
