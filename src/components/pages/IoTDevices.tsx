@@ -5,21 +5,32 @@ import { Button } from '../ui/button';
 import { Badge } from '../ui/badge';
 import { Progress } from '../ui/progress';
 import { Alert, AlertDescription } from '../ui/alert';
-import { 
-  Cpu, 
-  Wifi, 
-  Battery, 
-  Thermometer, 
-  Droplets, 
+import {
+  Cpu,
+  Wifi,
+  Battery,
+  Thermometer,
+  Droplets,
   Activity,
   AlertTriangle,
   CheckCircle,
   Clock,
-  MapPin
+  MapPin,
+  Wind
 } from 'lucide-react';
+import { useIotData } from '../../hooks/useIotData';
+import { Co2SensorData } from '../iot/Co2SensorData';
+import { ThermalCameraFeed } from '../iot/ThermalCameraFeed';
 
 export function IoTDevices() {
   const [selectedDevice, setSelectedDevice] = useState<any>(null);
+
+  // Example device IDs - these would ideally come from your actual device list
+  const sensorDeviceId = 'SEN-CO2-001';
+  const cameraDeviceId = 'CAM-THERMAL-001';
+
+  const sensorData = useIotData(sensorDeviceId);
+  const cameraData = useIotData(cameraDeviceId);
 
   const devicesData = [
     {
@@ -150,10 +161,9 @@ export function IoTDevices() {
       sortable: true,
       render: (value: number) => (
         <div className="flex items-center space-x-2">
-          <Battery className={`h-3 w-3 ${
-            value > 50 ? 'text-green-500' : 
+          <Battery className={`h-3 w-3 ${value > 50 ? 'text-green-500' :
             value > 20 ? 'text-yellow-500' : 'text-red-500'
-          }`} />
+            }`} />
           <span className="text-xs">{value}%</span>
         </div>
       )
@@ -271,6 +281,20 @@ export function IoTDevices() {
         </Card>
       </div>
 
+      {/* Live IoT Data Section */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        <div className="lg:col-span-2">
+          <h2 className="text-sm font-semibold mb-3 flex items-center">
+            <Activity className="h-4 w-4 mr-2 text-green-600" />
+            Live Sensor Telemetry ({sensorDeviceId})
+          </h2>
+          <Co2SensorData data={sensorData.latestData} loading={sensorData.loading} />
+        </div>
+        <div>
+          <ThermalCameraFeed media={cameraData.media} loading={cameraData.loading} />
+        </div>
+      </div>
+
       {/* Alerts */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         <Alert className="border-red-200 bg-red-50">
@@ -346,9 +370,9 @@ export function IoTDevices() {
                     <span className="text-gray-500">{conn.count} devices</span>
                   </div>
                   <div className="flex items-center space-x-2">
-                    <Progress 
-                      value={conn.status === 'Excellent' ? 100 : conn.status === 'Good' ? 75 : 50} 
-                      className="h-2 flex-1" 
+                    <Progress
+                      value={conn.status === 'Excellent' ? 100 : conn.status === 'Good' ? 75 : 50}
+                      className="h-2 flex-1"
                     />
                     <span className="text-xs text-gray-600">{conn.status}</span>
                   </div>

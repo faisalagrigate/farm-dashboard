@@ -26,9 +26,9 @@ export function Sidebar({ activeTab, onTabChange }: SidebarProps) {
   const menuItems = [
         { id: 'poultry', label: 'Agrigate Poultry AI', icon: Bird, color: 'text-purple-600' },
 
-    // { id: 'dashboard', label: 'Dashboard', icon: LayoutGrid, color: 'text-blue-600' },
+    { id: 'dashboard', label: 'Dashboard', icon: LayoutGrid, color: 'text-blue-600' },
     { id: 'farms', label: 'Farms', icon: MapPin, color: 'text-green-600' },
-    // { id: 'crops', label: 'Crops & Fields', icon: Wheat, color: 'text-green-500' },
+    { id: 'crops', label: 'Crops & Fields', icon: Wheat, color: 'text-green-500' },
     { id: 'livestock', label: 'Livestock', icon: Heart, color: 'text-red-500' },
     { id: 'equipment', label: 'Equipment', icon: Wrench, color: 'text-orange-600' },
     { id: 'labor', label: 'Labor & Resources', icon: Users, color: 'text-purple-600' },
