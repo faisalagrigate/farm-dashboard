@@ -9,11 +9,11 @@ import { Badge } from '../ui/badge';
 import { MapPin, Droplets, FileText, Bell, Clock } from 'lucide-react';
 
 interface QuickActionModalProps {
-  type: string;
+  type?: string;
   onClose: () => void;
 }
 
-export function QuickActionModal({ type, onClose }: QuickActionModalProps) {
+export function QuickActionModal({ type = 'farm', onClose }: QuickActionModalProps) {
   const [formData, setFormData] = useState<Record<string, any>>({});
 
   const updateFormData = (key: string, value: any) => {
@@ -29,7 +29,7 @@ export function QuickActionModal({ type, onClose }: QuickActionModalProps) {
               <MapPin className="h-5 w-5 text-green-600" />
               <h3 className="text-base font-semibold">Add New Farm</h3>
             </div>
-            
+
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <Label htmlFor="farmName" className="text-xs">Farm Name</Label>
@@ -73,7 +73,7 @@ export function QuickActionModal({ type, onClose }: QuickActionModalProps) {
                 />
               </div>
             </div>
-            
+
             <div>
               <Label htmlFor="description" className="text-xs">Description</Label>
               <Textarea
@@ -95,7 +95,7 @@ export function QuickActionModal({ type, onClose }: QuickActionModalProps) {
               <Droplets className="h-5 w-5 text-blue-600" />
               <h3 className="text-base font-semibold">Schedule Irrigation</h3>
             </div>
-            
+
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <Label htmlFor="zone" className="text-xs">Zone/Field</Label>
@@ -146,7 +146,7 @@ export function QuickActionModal({ type, onClose }: QuickActionModalProps) {
                 </Select>
               </div>
             </div>
-            
+
             <div className="bg-blue-50 p-3 rounded-lg">
               <div className="flex items-center space-x-2 mb-2">
                 <Badge className="bg-blue-100 text-blue-800 text-xs">AI Recommendation</Badge>
@@ -165,7 +165,7 @@ export function QuickActionModal({ type, onClose }: QuickActionModalProps) {
               <FileText className="h-5 w-5 text-indigo-600" />
               <h3 className="text-base font-semibold">Generate Report</h3>
             </div>
-            
+
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <Label htmlFor="reportType" className="text-xs">Report Type</Label>
@@ -232,7 +232,7 @@ export function QuickActionModal({ type, onClose }: QuickActionModalProps) {
               <Bell className="h-5 w-5 text-orange-600" />
               <h3 className="text-base font-semibold">Send Alert</h3>
             </div>
-            
+
             <div className="space-y-4">
               <div>
                 <Label htmlFor="alertType" className="text-xs">Alert Type</Label>
@@ -248,7 +248,7 @@ export function QuickActionModal({ type, onClose }: QuickActionModalProps) {
                   </SelectContent>
                 </Select>
               </div>
-              
+
               <div>
                 <Label htmlFor="recipients" className="text-xs">Recipients</Label>
                 <Select value={formData.recipients || ''} onValueChange={(value) => updateFormData('recipients', value)}>
@@ -263,7 +263,7 @@ export function QuickActionModal({ type, onClose }: QuickActionModalProps) {
                   </SelectContent>
                 </Select>
               </div>
-              
+
               <div>
                 <Label htmlFor="message" className="text-xs">Message</Label>
                 <Textarea
@@ -275,10 +275,10 @@ export function QuickActionModal({ type, onClose }: QuickActionModalProps) {
                   rows={4}
                 />
               </div>
-              
+
               <div className="flex items-center space-x-2">
-                <input 
-                  type="checkbox" 
+                <input
+                  type="checkbox"
                   id="urgent"
                   checked={formData.urgent || false}
                   onChange={(e) => updateFormData('urgent', e.target.checked)}
@@ -311,9 +311,9 @@ export function QuickActionModal({ type, onClose }: QuickActionModalProps) {
         <DialogHeader>
           <DialogTitle className="text-base">Quick Action</DialogTitle>
         </DialogHeader>
-        
+
         {renderContent()}
-        
+
         <div className="flex justify-end space-x-2 mt-6">
           <Button variant="outline" onClick={onClose} size="sm">
             Cancel

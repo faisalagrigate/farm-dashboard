@@ -1,3 +1,5 @@
+"use client";
+
 import React, { useState } from 'react';
 import { DataTable } from '../DataTable';
 import { Card } from '../ui/card';
@@ -26,81 +28,69 @@ export function IoTDevices() {
   const [selectedDevice, setSelectedDevice] = useState<any>(null);
 
   // Example device IDs - these would ideally come from your actual device list
-  const sensorDeviceId = 'SEN-CO2-001';
+  const sensorDeviceId = 'CBFRAN-223';
   const cameraDeviceId = 'CAM-THERMAL-001';
 
-  const sensorData = useIotData(sensorDeviceId);
+  const {
+    latestData,
+    allData,
+    pagination,
+    loading,
+    error,
+    setPage
+  } = useIotData(undefined, 1, 50); // Fetch 50 to discover unique devices
   const cameraData = useIotData(cameraDeviceId);
 
-  const devicesData = [
-    {
-      id: 'SEN001',
-      name: 'Soil Sensor Alpha',
-      type: 'Soil Moisture',
-      location: 'Field A - Zone 1',
-      status: 'online',
-      battery: 87,
-      lastReading: '2024-08-09 14:30',
-      value: '45%',
-      connectivity: 'WiFi',
-      firmware: 'v2.1.3'
-    },
-    {
-      id: 'SEN002',
-      name: 'Weather Station Beta',
-      type: 'Weather Monitor',
-      location: 'Field A - Central',
-      status: 'online',
-      battery: 92,
-      lastReading: '2024-08-09 14:29',
-      value: '24°C',
-      connectivity: 'LoRaWAN',
-      firmware: 'v1.8.2'
-    },
-    {
-      id: 'SEN003',
-      name: 'Humidity Tracker',
-      type: 'Humidity',
-      location: 'Greenhouse 1',
-      status: 'warning',
-      battery: 23,
-      lastReading: '2024-08-09 14:25',
-      value: '78%',
-      connectivity: 'Zigbee',
-      firmware: 'v2.0.1'
-    },
-    {
-      id: 'IRR001',
-      name: 'Smart Valve Controller',
-      type: 'Irrigation',
-      location: 'Field B - Zone 2',
-      status: 'offline',
-      battery: 0,
-      lastReading: '2024-08-09 12:45',
-      value: 'Closed',
-      connectivity: 'WiFi',
-      firmware: 'v1.5.7'
-    },
-    {
-      id: 'CAM001',
-      name: 'Livestock Monitor',
-      type: 'Camera',
-      location: 'Barn A',
-      status: 'online',
-      battery: 100,
-      lastReading: '2024-08-09 14:31',
-      value: 'Recording',
-      connectivity: 'Ethernet',
-      firmware: 'v3.2.1'
-    }
-  ];
+  const processedDevices = React.useMemo(() => {
+    if (!allData || allData.length === 0) return [];
+
+    const deviceMap = new Map();
+
+    // Sort by timestamp desc to ensure we process latest readings first
+    const sortedData = [...allData].sort((a, b) =>
+      new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+    );
+
+    sortedData.forEach(item => {
+      if (!deviceMap.has(item.deviceId)) {
+        const metrics = item.metrics || {};
+        const batteryVoltage = metrics['Battery Voltage']?.value || metrics['Battery']?.value || 0;
+
+        // Determine primary value to show in the table
+        let mainValue = 'N/A';
+        if (metrics.Temperature) mainValue = `${metrics.Temperature.value}${metrics.Temperature.unit}`;
+        else if (metrics.CO2) mainValue = `${metrics.CO2.value}${metrics.CO2.unit}`;
+        else if (metrics.RH) mainValue = `${metrics.RH.value}${metrics.RH.unit}`;
+        else if (metrics.temp) mainValue = `${metrics.temp.value}${metrics.temp.unit}`;
+
+        deviceMap.set(item.deviceId, {
+          id: item.deviceId,
+          name: item.deviceId === 'CBFRAN-223' ? 'Shed Monitor Node' :
+            item.deviceId === 'test-device-123' ? 'Testing Prototype' : `Node ${item.deviceId}`,
+          type: metrics.Temperature ? 'Weather Monitor' :
+            metrics.CO2 ? 'Humidity' : 'Soil Moisture', // Mapping types based on indicators
+          location: 'Poultry Shed A',
+          status: (new Date().getTime() - new Date(item.timestamp).getTime() < 86400000) ? 'online' : 'offline',
+          battery: batteryVoltage > 0 ? Math.min(100, Math.round((batteryVoltage / 12) * 100)) : 85,
+          lastReading: item.timestamp,
+          value: mainValue,
+          connectivity: 'WiFi',
+          firmware: 'v2.1.0'
+        });
+      }
+    });
+
+    return Array.from(deviceMap.values());
+  }, [allData]);
 
   const deviceStats = {
-    total: devicesData.length,
-    online: devicesData.filter(d => d.status === 'online').length,
-    warning: devicesData.filter(d => d.status === 'warning').length,
-    offline: devicesData.filter(d => d.status === 'offline').length,
-    avgBattery: Math.round(devicesData.reduce((sum, d) => sum + d.battery, 0) / devicesData.length)
+    total: processedDevices.length || 0,
+    online: processedDevices.filter(d => d.status === 'online').length || 0,
+    warning: processedDevices.filter(d => d.status === 'warning' || d.battery < 20).length || 0,
+    offline: processedDevices.filter(d => d.status === 'offline').length || 0,
+    avgBattery: processedDevices.length > 0
+      ? Math.round(processedDevices.reduce((sum, d) => sum + d.battery, 0) / processedDevices.length)
+      : 0
   };
 
   const columns = [
@@ -288,7 +278,7 @@ export function IoTDevices() {
             <Activity className="h-4 w-4 mr-2 text-green-600" />
             Live Sensor Telemetry ({sensorDeviceId})
           </h2>
-          <Co2SensorData data={sensorData.latestData} loading={sensorData.loading} />
+          <Co2SensorData data={latestData} loading={loading} />
         </div>
         <div>
           <ThermalCameraFeed media={cameraData.media} loading={cameraData.loading} />
@@ -324,14 +314,17 @@ export function IoTDevices() {
         {/* Devices Table */}
         <div className="lg:col-span-2">
           <DataTable
-            data={devicesData}
+            data={processedDevices}
             columns={columns}
             title="All Devices"
             searchPlaceholder="Search devices..."
             onAdd={() => console.log('Add device')}
             onEdit={(device) => setSelectedDevice(device)}
             onDelete={(device) => console.log('Delete device:', device)}
-            pageSize={8}
+            pageSize={pagination.limit}
+            currentPage={pagination.page}
+            totalRecords={pagination.total}
+            onPageChange={setPage}
           />
         </div>
 
@@ -341,11 +334,10 @@ export function IoTDevices() {
             <h3 className="text-base font-semibold mb-3">Device Types</h3>
             <div className="space-y-2">
               {[
-                { type: 'Soil Moisture', count: 1, color: 'bg-blue-100 text-blue-800' },
-                { type: 'Weather Monitor', count: 1, color: 'bg-green-100 text-green-800' },
-                { type: 'Humidity', count: 1, color: 'bg-orange-100 text-orange-800' },
-                { type: 'Irrigation', count: 1, color: 'bg-blue-100 text-blue-800' },
-                { type: 'Camera', count: 1, color: 'bg-purple-100 text-purple-800' }
+                { type: 'Weather Monitor', count: processedDevices.filter(d => d.type === 'Weather Monitor').length, color: 'bg-green-100 text-green-800' },
+                { type: 'Humidity', count: processedDevices.filter(d => d.type === 'Humidity').length, color: 'bg-orange-100 text-orange-800' },
+                { type: 'Soil Moisture', count: processedDevices.filter(d => d.type === 'Soil Moisture').length, color: 'bg-blue-100 text-blue-800' },
+                { type: 'Camera', count: cameraData.media.length > 0 ? 1 : 0, color: 'bg-purple-100 text-purple-800' }
               ].map((item, index) => (
                 <div key={index} className="flex justify-between items-center text-xs">
                   <span>{item.type}</span>
@@ -359,10 +351,7 @@ export function IoTDevices() {
             <h3 className="text-base font-semibold mb-3">Connectivity Status</h3>
             <div className="space-y-3">
               {[
-                { type: 'WiFi', count: 2, status: 'Good' },
-                { type: 'LoRaWAN', count: 1, status: 'Excellent' },
-                { type: 'Zigbee', count: 1, status: 'Fair' },
-                { type: 'Ethernet', count: 1, status: 'Excellent' }
+                { type: 'WiFi', count: processedDevices.length, status: 'Good' },
               ].map((conn, index) => (
                 <div key={index} className="space-y-1">
                   <div className="flex justify-between text-xs">

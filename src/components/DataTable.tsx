@@ -1,3 +1,5 @@
+"use client";
+
 import React, { useState, useMemo } from 'react';
 import { Card } from './ui/card';
 import { Button } from './ui/button';
@@ -24,24 +26,37 @@ interface DataTableProps {
   onEdit?: (row: any) => void;
   onDelete?: (row: any) => void;
   pageSize?: number;
+  onPageChange?: (page: number) => void;
+  onPageSizeChange?: (pageSize: number) => void;
+  totalPages?: number;
+  totalRecords?: number;
+  currentPage?: number;
 }
 
-export function DataTable({ 
-  data, 
-  columns, 
-  title, 
-  searchPlaceholder = "Search...", 
-  onAdd, 
-  onEdit, 
+export function DataTable({
+  data,
+  columns,
+  title,
+  searchPlaceholder = "Search...",
+  onAdd,
+  onEdit,
   onDelete,
-  pageSize = 10 
+  pageSize: initialPageSize = 10,
+  onPageChange,
+  onPageSizeChange,
+  totalPages: externalTotalPages,
+  totalRecords,
+  currentPage: externalCurrentPage
 }: DataTableProps) {
   const [search, setSearch] = useState('');
   const [sortColumn, setSortColumn] = useState('');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
   const [filterColumn, setFilterColumn] = useState('');
   const [filterValue, setFilterValue] = useState('');
-  const [currentPage, setCurrentPage] = useState(1);
+  const [internalPage, setInternalPage] = useState(1);
+
+  const currentPage = externalCurrentPage || internalPage;
+  const pageSize = initialPageSize;
 
   const filteredAndSortedData = useMemo(() => {
     let result = [...data];
@@ -68,11 +83,11 @@ export function DataTable({
         const aVal = a[sortColumn];
         const bVal = b[sortColumn];
         const direction = sortDirection === 'asc' ? 1 : -1;
-        
+
         if (typeof aVal === 'number' && typeof bVal === 'number') {
           return (aVal - bVal) * direction;
         }
-        
+
         return String(aVal).localeCompare(String(bVal)) * direction;
       });
     }
@@ -81,11 +96,13 @@ export function DataTable({
   }, [data, search, sortColumn, sortDirection, filterColumn, filterValue]);
 
   const paginatedData = useMemo(() => {
+    if (onPageChange) return filteredAndSortedData; // Assume server-side pagination
     const startIndex = (currentPage - 1) * pageSize;
     return filteredAndSortedData.slice(startIndex, startIndex + pageSize);
-  }, [filteredAndSortedData, currentPage, pageSize]);
+  }, [filteredAndSortedData, currentPage, pageSize, onPageChange]);
 
-  const totalPages = Math.ceil(filteredAndSortedData.length / pageSize);
+  const totalPages = externalTotalPages || Math.ceil(filteredAndSortedData.length / pageSize);
+  const displayTotalRecords = totalRecords || filteredAndSortedData.length;
 
   const handleSort = (columnKey: string) => {
     if (sortColumn === columnKey) {
@@ -96,18 +113,26 @@ export function DataTable({
     }
   };
 
+  const handlePageChange = (page: number) => {
+    if (onPageChange) {
+      onPageChange(page);
+    } else {
+      setInternalPage(page);
+    }
+  };
+
   const renderCellContent = (column: Column, row: any) => {
     const value = row[column.key];
-    
+
     if (column.render) {
       return column.render(value, row);
     }
-    
+
     // Auto-render common data types
     if (typeof value === 'boolean') {
       return <Badge variant={value ? 'default' : 'secondary'}>{value ? 'Yes' : 'No'}</Badge>;
     }
-    
+
     if (column.key.includes('status')) {
       const statusColors = {
         active: 'bg-green-100 text-green-800',
@@ -123,7 +148,7 @@ export function DataTable({
         </Badge>
       );
     }
-    
+
     return value;
   };
 
@@ -133,7 +158,7 @@ export function DataTable({
       <div className="flex justify-between items-center mb-4">
         <div>
           {title && <h3 className="text-base font-semibold">{title}</h3>}
-          <p className="text-xs text-gray-600">{filteredAndSortedData.length} records</p>
+          <p className="text-xs text-gray-600">{displayTotalRecords} records</p>
         </div>
         {onAdd && (
           <Button onClick={onAdd} size="sm" className="bg-green-600 hover:bg-green-700">
@@ -153,7 +178,7 @@ export function DataTable({
             className="pl-8 h-8 text-xs"
           />
         </div>
-        
+
         <Select value={filterColumn} onValueChange={setFilterColumn}>
           <SelectTrigger className="w-32 h-8 text-xs">
             <Filter className="h-3 w-3 mr-1" />
@@ -167,7 +192,7 @@ export function DataTable({
             ))}
           </SelectContent>
         </Select>
-        
+
         {filterColumn && (
           <Input
             placeholder="Filter value"
@@ -184,7 +209,7 @@ export function DataTable({
           <thead className="bg-gray-50">
             <tr>
               {columns.map(column => (
-                <th 
+                <th
                   key={column.key}
                   className="px-3 py-2 text-left text-xs font-medium text-gray-600 uppercase tracking-wide"
                 >
@@ -196,8 +221,8 @@ export function DataTable({
                         className="p-1 hover:bg-gray-200 rounded"
                       >
                         {sortColumn === column.key ? (
-                          sortDirection === 'asc' ? 
-                            <ChevronUp className="h-3 w-3" /> : 
+                          sortDirection === 'asc' ?
+                            <ChevronUp className="h-3 w-3" /> :
                             <ChevronDown className="h-3 w-3" />
                         ) : (
                           <ChevronUp className="h-3 w-3 text-gray-400" />
@@ -255,38 +280,44 @@ export function DataTable({
       {totalPages > 1 && (
         <div className="flex items-center justify-between mt-4">
           <p className="text-xs text-gray-600">
-            Showing {(currentPage - 1) * pageSize + 1} to {Math.min(currentPage * pageSize, filteredAndSortedData.length)} of {filteredAndSortedData.length} results
+            Showing {(currentPage - 1) * pageSize + 1} to {Math.min(currentPage * pageSize, displayTotalRecords)} of {displayTotalRecords} results
           </p>
           <div className="flex space-x-1">
             <Button
               variant="outline"
               size="sm"
-              onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
+              onClick={() => handlePageChange(Math.max(1, currentPage - 1))}
               disabled={currentPage === 1}
               className="h-7 text-xs"
             >
               Previous
             </Button>
-            
-            {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
-              const page = i + 1;
-              return (
-                <Button
-                  key={page}
-                  variant={currentPage === page ? "default" : "outline"}
-                  size="sm"
-                  onClick={() => setCurrentPage(page)}
-                  className="h-7 w-7 text-xs"
-                >
-                  {page}
-                </Button>
-              );
-            })}
-            
+
+            {(() => {
+              let startPage = Math.max(1, currentPage - 2);
+              let endPage = Math.min(totalPages, startPage + 4);
+              if (endPage === totalPages) startPage = Math.max(1, endPage - 4);
+
+              return Array.from({ length: (endPage - startPage) + 1 }, (_, i) => {
+                const page = startPage + i;
+                return (
+                  <Button
+                    key={page}
+                    variant={currentPage === page ? "default" : "outline"}
+                    size="sm"
+                    onClick={() => handlePageChange(page)}
+                    className="h-7 w-7 text-xs"
+                  >
+                    {page}
+                  </Button>
+                );
+              });
+            })()}
+
             <Button
               variant="outline"
               size="sm"
-              onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
+              onClick={() => handlePageChange(Math.min(totalPages, currentPage + 1))}
               disabled={currentPage === totalPages}
               className="h-7 text-xs"
             >

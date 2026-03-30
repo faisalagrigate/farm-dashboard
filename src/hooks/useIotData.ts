@@ -1,46 +1,80 @@
 import { useState, useEffect } from 'react';
 
-const API_BASE_URL = import.meta.env.VITE_IOT_API_URL || 'http://localhost:3000/iot';
+const BASE_URL = process.env.NEXT_PUBLIC_IOT_API_URL || 'https://dev-iot.agrigate.network';
+const API_URL = `${BASE_URL}/iot/data`;
 
-export function useIotData(deviceId: string) {
+export function useIotData(deviceId?: string, initialPage: number = 1, initialLimit: number = 50) {
     const [latestData, setLatestData] = useState<any>(null);
+    const [allData, setAllData] = useState<any[]>([]);
+    const [pagination, setPagination] = useState({ total: 0, page: initialPage, limit: initialLimit });
     const [media, setMedia] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
 
-    const fetchData = async () => {
+    const fetchData = async (page: number = pagination.page, limit: number = pagination.limit) => {
         try {
             setLoading(true);
 
-            // Fetch latest sensor data
-            const dataRes = await fetch(`${API_BASE_URL}/data/${deviceId}/latest`);
-            if (dataRes.ok) {
-                const data = await dataRes.json();
-                setLatestData(data);
-            }
+            // Construct URL with pagination parameters
+            const url = new URL(API_URL);
+            url.searchParams.append('page', page.toString());
+            url.searchParams.append('limit', limit.toString());
+            if (deviceId) url.searchParams.append('deviceId', deviceId);
 
-            // Fetch latest media
-            const mediaRes = await fetch(`${API_BASE_URL}/media/${deviceId}?limit=5`);
-            if (mediaRes.ok) {
-                const mediaData = await mediaRes.json();
-                setMedia(mediaData);
+            // Fetch data from the new IoT API
+            console.log(`[useIotData] Fetching: ${url.toString()}`);
+            const response = await fetch(url.toString(), {
+                cache: 'no-store'
+            });
+
+            if (response.ok) {
+                const result = await response.json();
+                const dataArray = result.data || [];
+                const paginationInfo = result.pagination || {};
+
+                console.log(`[useIotData] Received ${dataArray.length} items. Total: ${paginationInfo.total}`);
+                setAllData(dataArray);
+                setPagination({
+                    total: paginationInfo.total || dataArray.length,
+                    page: paginationInfo.page || page,
+                    limit: paginationInfo.limit || limit
+                });
+
+                // If deviceId is provided, filter for that device's latest reading
+                if (deviceId) {
+                    const deviceLatest = dataArray.find((item: any) => item.deviceId === deviceId);
+                    setLatestData(deviceLatest || null);
+                } else if (dataArray.length > 0) {
+                    setLatestData(dataArray[0]);
+                }
+            } else {
+                throw new Error('Failed to fetch IoT data');
             }
 
             setError(null);
-        } catch (err) {
-            setError('Failed to fetch IoT data');
+        } catch (err: any) {
+            setError(err.message || 'Failed to fetch IoT data');
         } finally {
             setLoading(false);
         }
     };
 
     useEffect(() => {
-        if (deviceId) {
-            fetchData();
-            const interval = setInterval(fetchData, 30000); // Refresh every 30s
-            return () => clearInterval(interval);
-        }
-    }, [deviceId]);
+        fetchData();
+        const interval = setInterval(fetchData, 30000); // Refresh every 30s
+        return () => clearInterval(interval);
+    }, [deviceId, pagination.page, pagination.limit]);
 
-    return { latestData, media, loading, error, refetch: fetchData };
+    const setPage = (page: number) => setPagination(prev => ({ ...prev, page }));
+
+    return {
+        latestData,
+        allData,
+        pagination,
+        media,
+        loading,
+        error,
+        refetch: fetchData,
+        setPage
+    };
 }

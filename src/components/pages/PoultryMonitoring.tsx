@@ -1,3 +1,5 @@
+"use client";
+
 import React, { useState } from 'react';
 import { Card } from '../ui/card';
 import { Button } from '../ui/button';
@@ -7,10 +9,10 @@ import { Alert, AlertDescription } from '../ui/alert';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
 import { DataTable } from '../DataTable';
 import { formatCurrency } from '../ui/currency-utils';
-import { 
-  Activity, 
-  Thermometer, 
-  Droplets, 
+import {
+  Activity,
+  Thermometer,
+  Droplets,
   Wind,
   AlertTriangle,
   CheckCircle,
@@ -34,18 +36,18 @@ import {
   MapPin,
   Users
 } from 'lucide-react';
-import { 
-  LineChart, 
-  Line, 
+import {
+  LineChart,
+  Line,
   BarChart,
   Bar,
   AreaChart,
   Area,
-  XAxis, 
-  YAxis, 
-  CartesianGrid, 
-  Tooltip, 
-  Legend, 
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  Legend,
   ResponsiveContainer,
   PieChart,
   Pie,
@@ -57,9 +59,72 @@ import {
   Radar
 } from 'recharts';
 
+import { useIotData } from '../../hooks/useIotData';
+
 export function PoultryMonitoring() {
   const [selectedFarm, setSelectedFarm] = useState('Farm-1');
   const [selectedShed, setSelectedShed] = useState('Shed-A');
+
+  const {
+    latestData: iotData,
+    allData: iotAllData,
+    pagination: iotPagination,
+    loading: iotLoading,
+    setPage: setIotPage
+  } = useIotData(undefined, 1, 10);
+
+  const iotHistory = React.useMemo(() => {
+    if (!iotAllData) return [];
+    return iotAllData.map((item: any) => ({
+      id: item.deviceId,
+      timestamp: item.timestamp,
+      temperature: item.metrics?.Temperature?.value || item.metrics?.temp?.value || '--',
+      humidity: item.metrics?.RH?.value || '--',
+      co2: item.metrics?.CO2?.value || '--',
+      nh3: item.metrics?.NH3?.value || '--',
+      battery: (item.metrics?.['Battery Voltage']?.value || item.metrics?.Battery?.value) ? Math.round(((item.metrics?.['Battery Voltage']?.value || item.metrics?.Battery?.value) / 12) * 100) : '--'
+    }));
+  }, [iotAllData]);
+
+  const iotColumns = [
+    {
+      key: 'timestamp',
+      label: 'Time',
+      sortable: true,
+      render: (value: string) => new Date(value).toLocaleString()
+    },
+    {
+      key: 'id',
+      label: 'Device ID',
+      sortable: true,
+      filterable: true
+    },
+    {
+      key: 'temperature',
+      label: 'Temp (°C)',
+      sortable: true
+    },
+    {
+      key: 'humidity',
+      label: 'Humidity (%)',
+      sortable: true
+    },
+    {
+      key: 'co2',
+      label: 'CO2 (mg/Kg)',
+      sortable: true
+    },
+    {
+      key: 'nh3',
+      label: 'NH3 (mg/Kg)',
+      sortable: true
+    },
+    {
+      key: 'battery',
+      label: 'Battery (%)',
+      sortable: true
+    }
+  ];
 
   // Overview Statistics
   const overviewStats = {
@@ -77,81 +142,90 @@ export function PoultryMonitoring() {
     estimatedRevenue: 22500000 // ৳22.5L
   };
 
-  // Real-time Sensor Data
-  const sensorData = [
-    {
-      id: 'SHED-A-TEMP-01',
-      shed: 'Shed A',
-      zone: 'Zone 1',
-      type: 'Temperature',
-      value: 28.5,
-      unit: '°C',
-      status: 'optimal',
-      threshold: '26-30°C',
-      lastUpdate: '30 sec ago',
-      battery: 92
-    },
-    {
-      id: 'SHED-A-HUM-01',
-      shed: 'Shed A',
-      zone: 'Zone 1',
-      type: 'Humidity',
-      value: 65,
-      unit: '%',
-      status: 'optimal',
-      threshold: '50-70%',
-      lastUpdate: '45 sec ago',
-      battery: 88
-    },
-    {
-      id: 'SHED-A-NH3-01',
-      shed: 'Shed A',
-      zone: 'Zone 1',
-      type: 'Ammonia',
-      value: 18,
-      unit: 'ppm',
-      status: 'warning',
-      threshold: '<20 ppm',
-      lastUpdate: '1 min ago',
-      battery: 85
-    },
-    {
-      id: 'SHED-A-CO2-01',
-      shed: 'Shed A',
-      zone: 'Zone 2',
-      type: 'CO2',
-      value: 2800,
-      unit: 'ppm',
-      status: 'optimal',
-      threshold: '<3000 ppm',
-      lastUpdate: '2 min ago',
-      battery: 90
-    },
-    {
-      id: 'SHED-B-TEMP-01',
-      shed: 'Shed B',
-      zone: 'Zone 1',
-      type: 'Temperature',
-      value: 32.1,
-      unit: '°C',
-      status: 'critical',
-      threshold: '26-30°C',
-      lastUpdate: '20 sec ago',
-      battery: 78
-    },
-    {
-      id: 'SHED-B-HUM-01',
-      shed: 'Shed B',
-      zone: 'Zone 1',
-      type: 'Humidity',
-      value: 48,
-      unit: '%',
-      status: 'warning',
-      threshold: '50-70%',
-      lastUpdate: '1 min ago',
-      battery: 82
-    }
-  ];
+  // Real-time Sensor Data (Dynamic from all devices)
+  const sensorData = React.useMemo(() => {
+    if (!iotAllData || iotAllData.length === 0) return [];
+
+    const devices = new Map();
+    // Sort by timestamp to get latest first
+    const sorted = [...iotAllData].sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+
+    sorted.forEach(item => {
+      // Filter out test devices or devices with all zero metrics
+      const isTestDevice = item.deviceId.toLowerCase().includes('test');
+      const metrics = item.metrics || {};
+      const hasRealMetrics = Object.values(metrics).some((m: any) => m.value > 0);
+
+      if (!devices.has(item.deviceId) && (!isTestDevice || hasRealMetrics)) {
+        const temp = metrics.Temperature?.value || metrics.temp?.value || 0;
+        const humidity = metrics.RH?.value || 0;
+        const nh3 = metrics.NH3?.value || 0;
+        const co2 = metrics.CO2?.value || 0;
+        const batteryVal = metrics['Battery Voltage']?.value || metrics.Battery?.value || 0;
+
+        devices.set(item.deviceId, [
+          {
+            id: `${item.deviceId}-TEMP`,
+            shed: item.deviceId === 'CBFRAN-223' ? 'Shed A' : 'Shed B',
+            zone: 'Zone 1',
+            type: 'Temperature',
+            value: temp,
+            unit: '°C',
+            status: temp > 30 ? 'critical' : temp > 28 ? 'warning' : 'optimal',
+            threshold: '26-30°C',
+            lastUpdate: 'Just now',
+            battery: Math.min(100, Math.round((batteryVal / 12) * 100))
+          }
+        ]);
+
+        if (humidity > 0) {
+          devices.get(item.deviceId).push({
+            id: `${item.deviceId}-HUM`,
+            shed: item.deviceId === 'CBFRAN-223' ? 'Shed A' : 'Shed B',
+            zone: 'Zone 1',
+            type: 'Humidity',
+            value: humidity,
+            unit: '%',
+            status: humidity > 70 ? 'warning' : 'optimal',
+            threshold: '50-70%',
+            lastUpdate: 'Just now',
+            battery: Math.min(100, Math.round((batteryVal / 12) * 100))
+          });
+        }
+
+        if (nh3 > 0) {
+          devices.get(item.deviceId).push({
+            id: `${item.deviceId}-NH3`,
+            shed: item.deviceId === 'CBFRAN-223' ? 'Shed A' : 'Shed B',
+            zone: 'Zone 1',
+            type: 'Ammonia',
+            value: nh3,
+            unit: 'mg/Kg',
+            status: nh3 > 10 ? 'critical' : 'optimal',
+            threshold: '<10 mg/Kg',
+            lastUpdate: 'Just now',
+            battery: Math.min(100, Math.round((batteryVal / 12) * 100))
+          });
+        }
+        if (co2 > 0) {
+          devices.get(item.deviceId).push({
+            id: `${item.deviceId}-CO2`,
+            shed: item.deviceId === 'CBFRAN-223' ? 'Shed A' : 'Shed B',
+            zone: 'Zone 2',
+            type: 'CO2',
+            value: co2,
+            unit: 'mg/Kg',
+            status: co2 > 1000 ? 'warning' : 'optimal',
+            threshold: '<1000 mg/Kg',
+            lastUpdate: 'Just now',
+            battery: Math.min(100, Math.round((batteryVal / 12) * 100))
+          });
+        }
+      }
+    });
+
+    return Array.from(devices.values()).flat();
+  }, [iotAllData]);
 
   // Water Quality Sensors
   const waterQualityData = [
@@ -448,14 +522,20 @@ export function PoultryMonitoring() {
   ];
 
   // Historical data for charts
-  const temperatureHistory = [
-    { time: '00:00', shedA: 27.5, shedB: 28.2 },
-    { time: '04:00', shedA: 26.8, shedB: 27.5 },
-    { time: '08:00', shedA: 28.2, shedB: 29.1 },
-    { time: '12:00', shedA: 29.8, shedB: 31.5 },
-    { time: '16:00', shedA: 28.9, shedB: 32.1 },
-    { time: '20:00', shedA: 28.1, shedB: 30.2 }
-  ];
+  // Historical data for charts (Last 24 readings)
+  const temperatureHistory = React.useMemo(() => {
+    if (!iotAllData || iotAllData.length === 0) return [];
+
+    // Take last 24 readings and format for chart
+    return [...iotAllData]
+      .slice(0, 24)
+      .reverse()
+      .map(item => ({
+        time: new Date(item.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        shedA: item.metrics?.Temperature?.value || item.metrics?.temp?.value || 0,
+        shedB: item.deviceId !== 'CBFRAN-223' ? (item.metrics?.Temperature?.value || item.metrics?.temp?.value) : 28 // Fallback for Shed B
+      }));
+  }, [iotAllData]);
 
   const mortalityHistory = [
     { day: 'Day 28', count: 8 },
@@ -533,7 +613,7 @@ export function PoultryMonitoring() {
           <p className="text-sm text-gray-500 mt-1">Real-time IoT monitoring and disease prevention system - Bangladesh</p>
         </div>
         <div className="flex items-center space-x-3">
-          <select 
+          <select
             className="px-3 py-2 border border-gray-300 rounded-lg text-sm"
             value={selectedFarm}
             onChange={(e) => setSelectedFarm(e.target.value)}
@@ -542,7 +622,7 @@ export function PoultryMonitoring() {
             <option value="Farm-2">Farm 2 - Chittagong</option>
             <option value="Farm-3">Farm 3 - Sylhet</option>
           </select>
-          <select 
+          <select
             className="px-3 py-2 border border-gray-300 rounded-lg text-sm"
             value={selectedShed}
             onChange={(e) => setSelectedShed(e.target.value)}
@@ -662,8 +742,8 @@ export function PoultryMonitoring() {
           <AlertDescription className="text-orange-800">
             <div className="flex items-center justify-between">
               <span>
-                <strong>{alertsData.filter(a => a.status === 'active').length} Active Alerts</strong> - 
-                {alertsData.filter(a => a.severity === 'critical' && a.status === 'active').length} critical, 
+                <strong>{alertsData.filter(a => a.status === 'active').length} Active Alerts</strong> -
+                {alertsData.filter(a => a.severity === 'critical' && a.status === 'active').length} critical,
                 {alertsData.filter(a => a.severity === 'warning' && a.status === 'active').length} warning
               </span>
               <Button size="sm" variant="outline" className="border-orange-600 text-orange-600 hover:bg-orange-100">
@@ -773,7 +853,7 @@ export function PoultryMonitoring() {
                     cx="50%"
                     cy="50%"
                     labelLine={false}
-                    label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
+                    label={({ name, percent }) => `${name} ${((percent || 0) * 100).toFixed(0)}%`}
                     outerRadius={80}
                     fill="#8884d8"
                     dataKey="value"
@@ -815,12 +895,11 @@ export function PoultryMonitoring() {
                 {sensorData.map((sensor) => (
                   <div key={sensor.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
                     <div className="flex items-center space-x-3 flex-1">
-                      <div className={`p-2 rounded-lg ${
-                        sensor.type === 'Temperature' ? 'bg-red-100' :
+                      <div className={`p-2 rounded-lg ${sensor.type === 'Temperature' ? 'bg-red-100' :
                         sensor.type === 'Humidity' ? 'bg-blue-100' :
-                        sensor.type === 'Ammonia' ? 'bg-orange-100' :
-                        'bg-gray-100'
-                      }`}>
+                          sensor.type === 'Ammonia' ? 'bg-orange-100' :
+                            'bg-gray-100'
+                        }`}>
                         {sensor.type === 'Temperature' && <Thermometer className="h-4 w-4 text-red-600" />}
                         {sensor.type === 'Humidity' && <Droplets className="h-4 w-4 text-blue-600" />}
                         {sensor.type === 'Ammonia' && <Wind className="h-4 w-4 text-orange-600" />}
@@ -863,28 +942,27 @@ export function PoultryMonitoring() {
                       <MapPin className="h-3 w-3 text-gray-400" />
                     </div>
                     <p className="text-xs text-gray-600 mb-3">{water.location}</p>
-                    
+
                     <div className="space-y-2">
                       <div className="flex justify-between items-center">
                         <span className="text-xs text-gray-600">pH Level</span>
                         <span className="text-xs font-semibold">{water.ph}</span>
                       </div>
                       <Progress value={(water.ph / 14) * 100} className="h-1" />
-                      
+
                       <div className="flex justify-between items-center mt-2">
                         <span className="text-xs text-gray-600">TDS (ppm)</span>
-                        <span className={`text-xs font-semibold ${
-                          water.tdsStatus === 'optimal' ? 'text-green-600' : 'text-orange-600'
-                        }`}>{water.tds}</span>
+                        <span className={`text-xs font-semibold ${water.tdsStatus === 'optimal' ? 'text-green-600' : 'text-orange-600'
+                          }`}>{water.tds}</span>
                       </div>
                       <Progress value={(water.tds / 500) * 100} className="h-1" />
-                      
+
                       <div className="flex justify-between items-center mt-2">
                         <span className="text-xs text-gray-600">Temp</span>
                         <span className="text-xs font-semibold">{water.temperature}°C</span>
                       </div>
                     </div>
-                    
+
                     <p className="text-xs text-gray-400 mt-2">{water.lastUpdate}</p>
                   </div>
                 ))}
@@ -905,7 +983,7 @@ export function PoultryMonitoring() {
                     </div>
                     <Weight className="h-4 w-4 text-blue-600" />
                   </div>
-                  
+
                   <div className="space-y-2">
                     <div className="flex justify-between items-end">
                       <div>
@@ -917,21 +995,35 @@ export function PoultryMonitoring() {
                         <p className="text-sm font-medium text-gray-700">{weight.expectedWeight} kg</p>
                       </div>
                     </div>
-                    
+
                     <div className="flex items-center justify-between">
                       <Badge className={`text-xs px-2 py-0.5 ${getStatusColor(weight.status)}`}>
                         {weight.variance}
                       </Badge>
                       <span className="text-xs text-gray-500">{weight.sampledChickens} sampled</span>
                     </div>
-                    
+
                     <Progress value={Math.min((weight.currentWeight / weight.expectedWeight) * 100, 100)} className="h-1.5" />
-                    
+
                     <p className="text-xs text-gray-400 mt-2">{weight.lastUpdate}</p>
                   </div>
                 </div>
               ))}
             </div>
+          </Card>
+          {/* Data Log / All Updates */}
+          <Card className="p-4">
+            <DataTable
+              data={iotHistory}
+              columns={iotColumns}
+              title="All Device Updates (Log)"
+              searchPlaceholder="Search updates..."
+              pageSize={iotPagination.limit}
+              currentPage={iotPagination.page}
+              totalRecords={iotPagination.total}
+              totalPages={Math.ceil(iotPagination.total / iotPagination.limit)}
+              onPageChange={setIotPage}
+            />
           </Card>
         </TabsContent>
 
@@ -959,7 +1051,7 @@ export function PoultryMonitoring() {
                         <span className="text-xs text-gray-600">{camera.status}</span>
                       </div>
                     </div>
-                    
+
                     <div className="grid grid-cols-2 gap-3">
                       <div>
                         <p className="text-xs text-gray-600">Chicken Count</p>
@@ -972,7 +1064,7 @@ export function PoultryMonitoring() {
                         <Progress value={camera.activityLevel} className="h-1.5 mt-1" />
                       </div>
                     </div>
-                    
+
                     <div className="grid grid-cols-3 gap-2 mt-3">
                       <div className="text-center p-2 bg-white rounded">
                         <p className="text-xs text-gray-600">Behavior</p>
@@ -991,7 +1083,7 @@ export function PoultryMonitoring() {
                         </p>
                       </div>
                     </div>
-                    
+
                     <p className="text-xs text-gray-400 mt-2">{camera.lastUpdate}</p>
                   </div>
                 ))}
@@ -1018,7 +1110,7 @@ export function PoultryMonitoring() {
                         {thermal.status}
                       </Badge>
                     </div>
-                    
+
                     <div className="space-y-3">
                       <div>
                         <div className="flex justify-between items-end mb-1">
@@ -1028,7 +1120,7 @@ export function PoultryMonitoring() {
                         <Progress value={((thermal.avgBodyTemp - 40) / (42 - 40)) * 100} className="h-2" />
                         <p className="text-xs text-gray-500 mt-1">Normal: {thermal.normalRange}</p>
                       </div>
-                      
+
                       <div className="grid grid-cols-2 gap-3">
                         <div className="p-2 bg-white rounded">
                           <p className="text-xs text-gray-600">Elevated Temp</p>
@@ -1039,7 +1131,7 @@ export function PoultryMonitoring() {
                           <p className="text-lg font-semibold text-red-600">{thermal.suspectedFever}</p>
                         </div>
                       </div>
-                      
+
                       <div className="flex items-center justify-between pt-2 border-t border-red-200">
                         <span className="text-xs text-gray-600">Last Thermal Scan</span>
                         <span className="text-xs text-gray-500">{thermal.lastScan}</span>
@@ -1071,12 +1163,10 @@ export function PoultryMonitoring() {
                   <div key={audio.id} className="p-4 bg-gray-50 rounded-lg border border-gray-200">
                     <div className="flex items-center justify-between mb-3">
                       <div className="flex items-center space-x-2">
-                        <div className={`p-2 rounded-lg ${
-                          audio.status === 'normal' ? 'bg-green-100' : 'bg-orange-100'
-                        }`}>
-                          <Mic className={`h-4 w-4 ${
-                            audio.status === 'normal' ? 'text-green-600' : 'text-orange-600'
-                          }`} />
+                        <div className={`p-2 rounded-lg ${audio.status === 'normal' ? 'bg-green-100' : 'bg-orange-100'
+                          }`}>
+                          <Mic className={`h-4 w-4 ${audio.status === 'normal' ? 'text-green-600' : 'text-orange-600'
+                            }`} />
                         </div>
                         <div>
                           <p className="text-xs font-medium text-gray-900">{audio.shed} - {audio.zone}</p>
@@ -1087,7 +1177,7 @@ export function PoultryMonitoring() {
                         {audio.status}
                       </Badge>
                     </div>
-                    
+
                     <div className="space-y-3">
                       <div>
                         <div className="flex justify-between items-end mb-1">
@@ -1097,51 +1187,42 @@ export function PoultryMonitoring() {
                         <Progress value={(audio.noiseLevel / 100) * 100} className="h-2" />
                         <p className="text-xs text-gray-500 mt-1">Normal: {audio.normalRange}</p>
                       </div>
-                      
+
                       <div className="grid grid-cols-3 gap-2">
-                        <div className={`p-2 rounded text-center ${
-                          audio.distressDetected ? 'bg-red-100 border border-red-300' : 'bg-white'
-                        }`}>
-                          <AlertTriangle className={`h-3 w-3 mx-auto mb-1 ${
-                            audio.distressDetected ? 'text-red-600' : 'text-gray-400'
-                          }`} />
-                          <p className="text-xs text-gray-600">Distress</p>
-                          <p className={`text-xs font-semibold ${
-                            audio.distressDetected ? 'text-red-600' : 'text-gray-400'
+                        <div className={`p-2 rounded text-center ${audio.distressDetected ? 'bg-red-100 border border-red-300' : 'bg-white'
                           }`}>
+                          <AlertTriangle className={`h-3 w-3 mx-auto mb-1 ${audio.distressDetected ? 'text-red-600' : 'text-gray-400'
+                            }`} />
+                          <p className="text-xs text-gray-600">Distress</p>
+                          <p className={`text-xs font-semibold ${audio.distressDetected ? 'text-red-600' : 'text-gray-400'
+                            }`}>
                             {audio.distressDetected ? 'Detected' : 'None'}
                           </p>
                         </div>
-                        
-                        <div className={`p-2 rounded text-center ${
-                          audio.coughingDetected ? 'bg-orange-100 border border-orange-300' : 'bg-white'
-                        }`}>
-                          <Volume2 className={`h-3 w-3 mx-auto mb-1 ${
-                            audio.coughingDetected ? 'text-orange-600' : 'text-gray-400'
-                          }`} />
-                          <p className="text-xs text-gray-600">Coughing</p>
-                          <p className={`text-xs font-semibold ${
-                            audio.coughingDetected ? 'text-orange-600' : 'text-gray-400'
+
+                        <div className={`p-2 rounded text-center ${audio.coughingDetected ? 'bg-orange-100 border border-orange-300' : 'bg-white'
                           }`}>
+                          <Volume2 className={`h-3 w-3 mx-auto mb-1 ${audio.coughingDetected ? 'text-orange-600' : 'text-gray-400'
+                            }`} />
+                          <p className="text-xs text-gray-600">Coughing</p>
+                          <p className={`text-xs font-semibold ${audio.coughingDetected ? 'text-orange-600' : 'text-gray-400'
+                            }`}>
                             {audio.coughingDetected ? 'Detected' : 'None'}
                           </p>
                         </div>
-                        
-                        <div className={`p-2 rounded text-center ${
-                          audio.fightingDetected ? 'bg-red-100 border border-red-300' : 'bg-white'
-                        }`}>
-                          <Zap className={`h-3 w-3 mx-auto mb-1 ${
-                            audio.fightingDetected ? 'text-red-600' : 'text-gray-400'
-                          }`} />
-                          <p className="text-xs text-gray-600">Fighting</p>
-                          <p className={`text-xs font-semibold ${
-                            audio.fightingDetected ? 'text-red-600' : 'text-gray-400'
+
+                        <div className={`p-2 rounded text-center ${audio.fightingDetected ? 'bg-red-100 border border-red-300' : 'bg-white'
                           }`}>
+                          <Zap className={`h-3 w-3 mx-auto mb-1 ${audio.fightingDetected ? 'text-red-600' : 'text-gray-400'
+                            }`} />
+                          <p className="text-xs text-gray-600">Fighting</p>
+                          <p className={`text-xs font-semibold ${audio.fightingDetected ? 'text-red-600' : 'text-gray-400'
+                            }`}>
                             {audio.fightingDetected ? 'Detected' : 'None'}
                           </p>
                         </div>
                       </div>
-                      
+
                       <div className="flex items-center justify-between pt-2 border-t border-gray-200">
                         <span className="text-xs text-gray-600">Last Analysis</span>
                         <span className="text-xs text-gray-500">{audio.lastAnalysis}</span>
@@ -1154,7 +1235,7 @@ export function PoultryMonitoring() {
 
             <Card className="p-4">
               <h3 className="font-semibold text-gray-900 mb-4">Sound Pattern Analysis</h3>
-              
+
               {/* Audio Waveform Placeholder */}
               <div className="mb-4 p-6 bg-gradient-to-r from-purple-50 to-blue-50 rounded-lg border border-purple-200">
                 <div className="flex items-center justify-between mb-3">
@@ -1164,25 +1245,25 @@ export function PoultryMonitoring() {
                   </div>
                   <Badge className="text-xs bg-green-100 text-green-700">Recording</Badge>
                 </div>
-                
+
                 {/* Simulated Waveform */}
                 <div className="flex items-center space-x-1 h-20">
                   {[...Array(50)].map((_, i) => (
-                    <div 
+                    <div
                       key={i}
                       className="flex-1 bg-purple-400 rounded-full"
                       style={{ height: `${Math.random() * 100}%` }}
                     />
                   ))}
                 </div>
-                
+
                 <p className="text-xs text-gray-600 mt-3 text-center">Shed A - Zone 1 | 65 dB</p>
               </div>
 
               {/* Sound Event Log */}
               <div className="space-y-2">
                 <h4 className="text-xs font-semibold text-gray-700">Recent Sound Events</h4>
-                
+
                 <div className="space-y-2 max-h-64 overflow-y-auto">
                   <div className="p-2 bg-red-50 rounded border border-red-200">
                     <div className="flex items-center justify-between">
@@ -1194,7 +1275,7 @@ export function PoultryMonitoring() {
                     </div>
                     <p className="text-xs text-gray-600 mt-1 ml-5">Shed B - Zone 1 | Confidence: 87%</p>
                   </div>
-                  
+
                   <div className="p-2 bg-orange-50 rounded border border-orange-200">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center space-x-2">
@@ -1205,7 +1286,7 @@ export function PoultryMonitoring() {
                     </div>
                     <p className="text-xs text-gray-600 mt-1 ml-5">Shed B - Zone 1 | Confidence: 78%</p>
                   </div>
-                  
+
                   <div className="p-2 bg-green-50 rounded border border-green-200">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center space-x-2">
@@ -1216,7 +1297,7 @@ export function PoultryMonitoring() {
                     </div>
                     <p className="text-xs text-gray-600 mt-1 ml-5">Shed A - Zone 1 | All zones normal</p>
                   </div>
-                  
+
                   <div className="p-2 bg-blue-50 rounded border border-blue-200">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center space-x-2">
@@ -1242,31 +1323,31 @@ export function PoultryMonitoring() {
                 <h3 className="font-semibold text-gray-900">Mortality Risk Assessment</h3>
                 <Brain className="h-4 w-4 text-purple-600" />
               </div>
-              
+
               <div className="grid grid-cols-3 gap-3 mb-4">
                 <div className="p-3 bg-orange-50 rounded-lg border border-orange-200 text-center">
                   <p className="text-xs text-gray-600 mb-1">Today</p>
                   <p className="text-2xl font-semibold text-orange-600">{mlPredictions.mortalityRisk.today}</p>
                   <p className="text-xs text-gray-500 mt-1">chickens</p>
                 </div>
-                
+
                 <div className="p-3 bg-orange-50 rounded-lg border border-orange-200 text-center">
                   <p className="text-xs text-gray-600 mb-1">Tomorrow</p>
                   <p className="text-2xl font-semibold text-orange-600">{mlPredictions.mortalityRisk.tomorrow}</p>
                   <p className="text-xs text-gray-500 mt-1">chickens</p>
                 </div>
-                
+
                 <div className="p-3 bg-red-50 rounded-lg border border-red-200 text-center">
                   <p className="text-xs text-gray-600 mb-1">Next Week</p>
                   <p className="text-2xl font-semibold text-red-600">{mlPredictions.mortalityRisk.nextWeek}</p>
                   <p className="text-xs text-gray-500 mt-1">chickens</p>
                 </div>
               </div>
-              
+
               <Alert className="border-orange-200 bg-orange-50">
                 <TrendingUp className="h-4 w-4 text-orange-600" />
                 <AlertDescription className="text-orange-800 text-xs">
-                  Mortality trend is <strong>{mlPredictions.mortalityRisk.trend}</strong>. 
+                  Mortality trend is <strong>{mlPredictions.mortalityRisk.trend}</strong>.
                   Recommend increased monitoring and vet consultation.
                 </AlertDescription>
               </Alert>
@@ -1278,7 +1359,7 @@ export function PoultryMonitoring() {
                 <h3 className="font-semibold text-gray-900">Disease Risk Prediction</h3>
                 <Heart className="h-4 w-4 text-red-600" />
               </div>
-              
+
               <div className="space-y-3">
                 <div>
                   <div className="flex justify-between items-center mb-1">
@@ -1287,7 +1368,7 @@ export function PoultryMonitoring() {
                   </div>
                   <Progress value={mlPredictions.diseaseRisk.respiratoryDisease} className="h-2" />
                 </div>
-                
+
                 <div>
                   <div className="flex justify-between items-center mb-1">
                     <span className="text-xs text-gray-600">Metabolic Disorder</span>
@@ -1295,7 +1376,7 @@ export function PoultryMonitoring() {
                   </div>
                   <Progress value={mlPredictions.diseaseRisk.metabolicDisorder} className="h-2" />
                 </div>
-                
+
                 <div>
                   <div className="flex justify-between items-center mb-1">
                     <span className="text-xs text-gray-600">Parasites</span>
@@ -1303,7 +1384,7 @@ export function PoultryMonitoring() {
                   </div>
                   <Progress value={mlPredictions.diseaseRisk.parasites} className="h-2" />
                 </div>
-                
+
                 <div>
                   <div className="flex justify-between items-center mb-1">
                     <span className="text-xs text-gray-600">Viral Infection</span>
@@ -1312,11 +1393,11 @@ export function PoultryMonitoring() {
                   <Progress value={mlPredictions.diseaseRisk.viral} className="h-2" />
                 </div>
               </div>
-              
+
               <Alert className="border-red-200 bg-red-50 mt-4">
                 <AlertTriangle className="h-4 w-4 text-red-600" />
                 <AlertDescription className="text-red-800 text-xs">
-                  <strong>High Risk:</strong> Respiratory disease risk at 35%. 
+                  <strong>High Risk:</strong> Respiratory disease risk at 35%.
                   Monitor coughing sounds and thermal readings closely.
                 </AlertDescription>
               </Alert>
@@ -1328,24 +1409,24 @@ export function PoultryMonitoring() {
                 <h3 className="font-semibold text-gray-900">FCR Forecast & Optimization</h3>
                 <Activity className="h-4 w-4 text-green-600" />
               </div>
-              
+
               <div className="grid grid-cols-3 gap-3 mb-4">
                 <div className="p-3 bg-blue-50 rounded-lg text-center">
                   <p className="text-xs text-gray-600 mb-1">Current FCR</p>
                   <p className="text-2xl font-semibold text-blue-600">{mlPredictions.fcrForecast.current}</p>
                 </div>
-                
+
                 <div className="p-3 bg-orange-50 rounded-lg text-center">
                   <p className="text-xs text-gray-600 mb-1">Projected FCR</p>
                   <p className="text-2xl font-semibold text-orange-600">{mlPredictions.fcrForecast.projected}</p>
                 </div>
-                
+
                 <div className="p-3 bg-green-50 rounded-lg text-center">
                   <p className="text-xs text-gray-600 mb-1">Optimal FCR</p>
                   <p className="text-2xl font-semibold text-green-600">{mlPredictions.fcrForecast.optimal}</p>
                 </div>
               </div>
-              
+
               <div className="mb-4">
                 <ResponsiveContainer width="100%" height={150}>
                   <LineChart data={fcrHistory}>
@@ -1357,11 +1438,11 @@ export function PoultryMonitoring() {
                   </LineChart>
                 </ResponsiveContainer>
               </div>
-              
+
               <Alert className="border-orange-200 bg-orange-50">
                 <TrendingUp className="h-4 w-4 text-orange-600" />
                 <AlertDescription className="text-orange-800 text-xs">
-                  FCR trend is <strong>{mlPredictions.fcrForecast.trend}</strong>. 
+                  FCR trend is <strong>{mlPredictions.fcrForecast.trend}</strong>.
                   Consider adjusting feed formulation and environmental conditions.
                 </AlertDescription>
               </Alert>
@@ -1373,7 +1454,7 @@ export function PoultryMonitoring() {
                 <h3 className="font-semibold text-gray-900">AI-Powered Recommendations</h3>
                 <Zap className="h-4 w-4 text-yellow-600" />
               </div>
-              
+
               <div className="space-y-3">
                 <div className="p-3 bg-purple-50 rounded-lg border border-purple-200">
                   <div className="flex items-start space-x-2">
@@ -1381,7 +1462,7 @@ export function PoultryMonitoring() {
                     <div>
                       <p className="text-xs font-semibold text-gray-900">Optimize Feeding Schedule</p>
                       <p className="text-xs text-gray-600 mt-1">
-                        Increase feeding frequency in Shed A Zone 2 based on weight variance analysis. 
+                        Increase feeding frequency in Shed A Zone 2 based on weight variance analysis.
                         Expected FCR improvement: 0.08
                       </p>
                       <Button size="sm" variant="outline" className="mt-2 text-xs h-7">
@@ -1390,14 +1471,14 @@ export function PoultryMonitoring() {
                     </div>
                   </div>
                 </div>
-                
+
                 <div className="p-3 bg-red-50 rounded-lg border border-red-200">
                   <div className="flex items-start space-x-2">
                     <AlertTriangle className="h-4 w-4 text-red-600 mt-0.5" />
                     <div>
                       <p className="text-xs font-semibold text-gray-900">Immediate Veterinary Inspection</p>
                       <p className="text-xs text-gray-600 mt-1">
-                        Shed B Zone 1 shows multiple warning signs: elevated temperature, distress sounds, 
+                        Shed B Zone 1 shows multiple warning signs: elevated temperature, distress sounds,
                         and low activity. Risk of disease outbreak: 67%
                       </p>
                       <Button size="sm" variant="outline" className="mt-2 text-xs h-7 border-red-600 text-red-600">
@@ -1406,14 +1487,14 @@ export function PoultryMonitoring() {
                     </div>
                   </div>
                 </div>
-                
+
                 <div className="p-3 bg-blue-50 rounded-lg border border-blue-200">
                   <div className="flex items-start space-x-2">
                     <Thermometer className="h-4 w-4 text-blue-600 mt-0.5" />
                     <div>
                       <p className="text-xs font-semibold text-gray-900">Adjust Environmental Controls</p>
                       <p className="text-xs text-gray-600 mt-1">
-                        Reduce temperature by 1.5°C in Shed B and increase ventilation rate by 15% 
+                        Reduce temperature by 1.5°C in Shed B and increase ventilation rate by 15%
                         to lower ammonia levels.
                       </p>
                       <Button size="sm" variant="outline" className="mt-2 text-xs h-7">
@@ -1422,14 +1503,14 @@ export function PoultryMonitoring() {
                     </div>
                   </div>
                 </div>
-                
+
                 <div className="p-3 bg-green-50 rounded-lg border border-green-200">
                   <div className="flex items-start space-x-2">
                     <CheckCircle className="h-4 w-4 text-green-600 mt-0.5" />
                     <div>
                       <p className="text-xs font-semibold text-gray-900">Performance Recognition</p>
                       <p className="text-xs text-gray-600 mt-1">
-                        Shed A maintains optimal conditions. Growth rate 8% above target. 
+                        Shed A maintains optimal conditions. Growth rate 8% above target.
                         Continue current management practices.
                       </p>
                     </div>
@@ -1447,9 +1528,8 @@ export function PoultryMonitoring() {
               <Card key={device.id} className="p-4">
                 <div className="flex items-center justify-between mb-4">
                   <div className="flex items-center space-x-3">
-                    <div className={`p-3 rounded-lg ${
-                      device.status === 'online' ? 'bg-green-100' : 'bg-orange-100'
-                    }`}>
+                    <div className={`p-3 rounded-lg ${device.status === 'online' ? 'bg-green-100' : 'bg-orange-100'
+                      }`}>
                       {device.type.includes('Gateway') ? (
                         <Radio className={`h-5 w-5 ${device.status === 'online' ? 'text-green-600' : 'text-orange-600'}`} />
                       ) : (
@@ -1461,13 +1541,12 @@ export function PoultryMonitoring() {
                       <p className="text-xs text-gray-500">{device.type}</p>
                     </div>
                   </div>
-                  <Badge className={`text-xs px-2 py-1 ${
-                    device.status === 'online' ? 'bg-green-100 text-green-700' : 'bg-orange-100 text-orange-700'
-                  }`}>
+                  <Badge className={`text-xs px-2 py-1 ${device.status === 'online' ? 'bg-green-100 text-green-700' : 'bg-orange-100 text-orange-700'
+                    }`}>
                     {device.status}
                   </Badge>
                 </div>
-                
+
                 <div className="space-y-3">
                   <div className="flex items-center justify-between p-2 bg-gray-50 rounded">
                     <div className="flex items-center space-x-2">
@@ -1476,7 +1555,7 @@ export function PoultryMonitoring() {
                     </div>
                     <span className="text-xs font-medium text-gray-900">{device.location}</span>
                   </div>
-                  
+
                   <div className="flex items-center justify-between p-2 bg-gray-50 rounded">
                     <div className="flex items-center space-x-2">
                       <Clock className="h-3 w-3 text-gray-400" />
@@ -1484,7 +1563,7 @@ export function PoultryMonitoring() {
                     </div>
                     <span className="text-xs font-medium text-gray-900">{device.uptime}</span>
                   </div>
-                  
+
                   {device.type.includes('Gateway') ? (
                     <>
                       <div className="flex items-center justify-between p-2 bg-gray-50 rounded">
@@ -1494,7 +1573,7 @@ export function PoultryMonitoring() {
                         </div>
                         <span className="text-xs font-medium text-gray-900">{device.sensorsConnected}</span>
                       </div>
-                      
+
                       <div className="flex items-center justify-between p-2 bg-gray-50 rounded">
                         <div className="flex items-center space-x-2">
                           <Activity className="h-3 w-3 text-gray-400" />
@@ -1514,18 +1593,17 @@ export function PoultryMonitoring() {
                           {device.cameras} / {device.audioSensors}
                         </span>
                       </div>
-                      
+
                       <div className="space-y-2">
                         <div>
                           <div className="flex justify-between items-center mb-1">
                             <span className="text-xs text-gray-600">CPU Usage</span>
-                            <span className={`text-xs font-semibold ${
-                              device.cpuUsage! > 80 ? 'text-red-600' : 'text-gray-900'
-                            }`}>{device.cpuUsage}%</span>
+                            <span className={`text-xs font-semibold ${device.cpuUsage! > 80 ? 'text-red-600' : 'text-gray-900'
+                              }`}>{device.cpuUsage}%</span>
                           </div>
                           <Progress value={device.cpuUsage!} className="h-1.5" />
                         </div>
-                        
+
                         {device.gpuUsage !== null && (
                           <div>
                             <div className="flex justify-between items-center mb-1">
@@ -1535,27 +1613,25 @@ export function PoultryMonitoring() {
                             <Progress value={device.gpuUsage} className="h-1.5" />
                           </div>
                         )}
-                        
+
                         <div>
                           <div className="flex justify-between items-center mb-1">
                             <span className="text-xs text-gray-600">Memory Usage</span>
-                            <span className={`text-xs font-semibold ${
-                              device.memoryUsage! > 80 ? 'text-orange-600' : 'text-gray-900'
-                            }`}>{device.memoryUsage}%</span>
+                            <span className={`text-xs font-semibold ${device.memoryUsage! > 80 ? 'text-orange-600' : 'text-gray-900'
+                              }`}>{device.memoryUsage}%</span>
                           </div>
                           <Progress value={device.memoryUsage!} className="h-1.5" />
                         </div>
-                        
+
                         <div className="flex justify-between items-center p-2 bg-gray-50 rounded">
                           <span className="text-xs text-gray-600">Temperature</span>
-                          <span className={`text-xs font-semibold ${
-                            device.temperature! > 65 ? 'text-orange-600' : 'text-gray-900'
-                          }`}>{device.temperature}°C</span>
+                          <span className={`text-xs font-semibold ${device.temperature! > 65 ? 'text-orange-600' : 'text-gray-900'
+                            }`}>{device.temperature}°C</span>
                         </div>
                       </div>
                     </>
                   )}
-                  
+
                   <div className="pt-2 border-t border-gray-200">
                     <div className="flex items-center justify-between">
                       <span className="text-xs text-gray-500">Last Update</span>
@@ -1566,7 +1642,7 @@ export function PoultryMonitoring() {
               </Card>
             ))}
           </div>
-          
+
           {/* System Architecture Diagram */}
           <Card className="p-4">
             <h3 className="font-semibold text-gray-900 mb-4">System Architecture Overview</h3>
@@ -1583,7 +1659,7 @@ export function PoultryMonitoring() {
                   <li>• Weight Plates</li>
                 </ul>
               </div>
-              
+
               <div className="p-4 bg-purple-50 rounded-lg border border-purple-200">
                 <div className="text-center mb-3">
                   <Radio className="h-6 w-6 text-purple-600 mx-auto" />
@@ -1596,7 +1672,7 @@ export function PoultryMonitoring() {
                   <li>• Cloud Sync</li>
                 </ul>
               </div>
-              
+
               <div className="p-4 bg-green-50 rounded-lg border border-green-200">
                 <div className="text-center mb-3">
                   <Brain className="h-6 w-6 text-green-600 mx-auto" />
@@ -1609,7 +1685,7 @@ export function PoultryMonitoring() {
                   <li>• Real-time Alerts</li>
                 </ul>
               </div>
-              
+
               <div className="p-4 bg-orange-50 rounded-lg border border-orange-200">
                 <div className="text-center mb-3">
                   <Activity className="h-6 w-6 text-orange-600 mx-auto" />
@@ -1641,11 +1717,11 @@ export function PoultryMonitoring() {
                 </Button>
               </div>
             </div>
-            
+
             <div className="space-y-2">
               {alertsData.map((alert) => (
-                <div 
-                  key={alert.id} 
+                <div
+                  key={alert.id}
                   className={`p-3 rounded-lg border ${getSeverityColor(alert.severity)}`}
                 >
                   <div className="flex items-start justify-between">
@@ -1660,11 +1736,10 @@ export function PoultryMonitoring() {
                           <span className="text-xs font-semibold text-gray-900">{alert.type}</span>
                           <span className="text-xs text-gray-500">•</span>
                           <span className="text-xs text-gray-600">{alert.shed} - {alert.zone}</span>
-                          <Badge className={`text-xs px-2 py-0 ${
-                            alert.status === 'active' ? 'bg-red-100 text-red-700' :
+                          <Badge className={`text-xs px-2 py-0 ${alert.status === 'active' ? 'bg-red-100 text-red-700' :
                             alert.status === 'investigating' ? 'bg-orange-100 text-orange-700' :
-                            'bg-green-100 text-green-700'
-                          }`}>
+                              'bg-green-100 text-green-700'
+                            }`}>
                             {alert.status}
                           </Badge>
                         </div>
@@ -1696,7 +1771,7 @@ export function PoultryMonitoring() {
               ))}
             </div>
           </Card>
-          
+
           {/* Alert Statistics */}
           <div className="grid grid-cols-4 gap-4">
             <Card className="p-4">
@@ -1707,7 +1782,7 @@ export function PoultryMonitoring() {
               <p className="text-2xl font-semibold text-gray-900">{alertsData.length}</p>
               <p className="text-xs text-gray-500 mt-1">+3 from yesterday</p>
             </Card>
-            
+
             <Card className="p-4">
               <div className="flex items-center justify-between mb-2">
                 <span className="text-xs text-gray-600">Active Alerts</span>
@@ -1718,7 +1793,7 @@ export function PoultryMonitoring() {
               </p>
               <p className="text-xs text-gray-500 mt-1">Requires attention</p>
             </Card>
-            
+
             <Card className="p-4">
               <div className="flex items-center justify-between mb-2">
                 <span className="text-xs text-gray-600">Critical Alerts</span>
@@ -1729,7 +1804,7 @@ export function PoultryMonitoring() {
               </p>
               <p className="text-xs text-gray-500 mt-1">Immediate action needed</p>
             </Card>
-            
+
             <Card className="p-4">
               <div className="flex items-center justify-between mb-2">
                 <span className="text-xs text-gray-600">Resolved (24h)</span>

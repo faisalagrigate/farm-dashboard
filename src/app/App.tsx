@@ -1,40 +1,34 @@
+"use client";
+
 import React, { useState } from 'react';
-import { Sidebar } from './components/Sidebar';
-import { Dashboard } from './components/pages/Dashboard';
-import { Farms } from './components/pages/Farms';
-import { Crops } from './components/pages/Crops';
-import { Livestock } from './components/pages/Livestock';
-import { PoultryMonitoring } from './components/pages/PoultryMonitoring';
-import { Equipment } from './components/pages/Equipment';
-import { Labor } from './components/pages/Labor';
-import { Sales } from './components/pages/Sales';
-import { IoTDevices } from './components/pages/IoTDevices';
-import { Irrigation } from './components/pages/Irrigation';
-import { Weather } from './components/pages/Weather';
-import { Reports } from './components/pages/Reports';
-import { Tasks } from './components/pages/Tasks';
-import { Settings } from './components/pages/Settings';
+import { Sidebar } from '../components/Sidebar';
+import { Dashboard } from '../components/pages/Dashboard';
+import { Farms } from '../components/pages/Farms';
+import { Livestock } from '../components/pages/Livestock';
+import { PoultryMonitoring } from '../components/pages/PoultryMonitoring';
+import { Equipment } from '../components/pages/Equipment';
+import { Labor } from '../components/pages/Labor';
+import { Sales } from '../components/pages/Sales';
+import { IoTDevices } from '../components/pages/IoTDevices';
+import { Irrigation } from '../components/pages/Irrigation';
+import { Weather } from '../components/pages/Weather';
+import { Reports } from '../components/pages/Reports';
+import { Tasks } from '../components/pages/Tasks';
+import { Settings } from '../components/pages/Settings';
 
 export default function App() {
   const [activeTab, setActiveTab] = useState('poultry');
 
   const renderContent = () => {
     switch (activeTab) {
-       case 'poultry':
+      case 'poultry':
         return <PoultryMonitoring />;
       case 'dashboard':
         return <Dashboard />;
       case 'farms':
         return <Farms />;
-      case 'crops':
-        return <Crops />;
       case 'livestock':
         return <Livestock />;
-     
-      case 'equipment':
-        return <Equipment />;
-      case 'labor':
-        return <Labor />;
       case 'sales':
         return <Sales />;
       case 'iot-devices':
