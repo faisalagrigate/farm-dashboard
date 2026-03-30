@@ -4,14 +4,20 @@ frontend:
     preBuild:
       commands:
         - npm install
+        # Fetch SSM secrets (for server-side usage)
+        - |
+          echo "Fetching SSM secrets..."
+          export MY_SECRET=$(aws ssm get-parameters --names "/amplify/d1znnr5qhqz895/main/SECRET_NAME" --with-decryption --query 'Parameters[0].Value' --output text)
+          echo "Secrets fetched"
     build:
       commands:
         - npm run build
   artifacts:
-    baseDirectory: dist
+    # For Next.js, you need to point to the "out" folder if using static export,
+    # or leave artifacts empty if deploying SSR (Amplify handles .next automatically)
+    baseDirectory: out
     files:
       - '**/*'
   cache:
     paths:
       - node_modules/**/*
-
