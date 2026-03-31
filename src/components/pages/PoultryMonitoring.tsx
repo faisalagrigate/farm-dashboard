@@ -1026,6 +1026,7 @@ export function PoultryMonitoring() {
             />
           </Card>
         </TabsContent>
+        
 
         {/* Cameras Tab */}
         <TabsContent value="cameras" className="space-y-4">
