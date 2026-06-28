@@ -29,7 +29,7 @@ export function IoTDevices() {
 
   // Example device IDs - these would ideally come from your actual device list
   const sensorDeviceId = 'CBFRAN-223';
-  const cameraDeviceId = 'CAM-THERMAL-001';
+  const cameraDeviceId = 'AI23472';
 
   const {
     latestData,
@@ -202,7 +202,7 @@ export function IoTDevices() {
         </div>
         <div className="flex space-x-2">
           <Button size="sm" variant="outline" onClick={() => {
-            const url = `${process.env.NEXT_PUBLIC_IOT_API_URL || 'http://localhost:8004'}/iot/data/export`;
+            const url = `${process.env.NEXT_PUBLIC_IOT_API_URL || 'http://localhost:8011'}/iot/data/export`;
             window.open(url, '_blank');
           }}>
             <Cpu className="h-4 w-4 mr-1" />
