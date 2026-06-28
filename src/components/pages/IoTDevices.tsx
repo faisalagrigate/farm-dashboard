@@ -201,6 +201,13 @@ export function IoTDevices() {
           <p className="text-sm text-gray-600">Manage and monitor all smart devices across your farms</p>
         </div>
         <div className="flex space-x-2">
+          <Button size="sm" variant="outline" onClick={() => {
+            const url = `${process.env.NEXT_PUBLIC_IOT_API_URL || 'http://localhost:8004'}/iot/data/export`;
+            window.open(url, '_blank');
+          }}>
+            <Cpu className="h-4 w-4 mr-1" />
+            Export Data
+          </Button>
           <Button size="sm" variant="outline">
             <Cpu className="h-4 w-4 mr-1" />
             Add Device

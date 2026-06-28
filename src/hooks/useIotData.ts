@@ -44,6 +44,17 @@ export function useIotData(deviceId?: string, initialPage: number = 1, initialLi
                 if (deviceId) {
                     const deviceLatest = dataArray.find((item: any) => item.deviceId === deviceId);
                     setLatestData(deviceLatest || null);
+                    
+                    // Fetch media for this device
+                    try {
+                        const mediaRes = await fetch(`${BASE_URL}/iot/media/${deviceId}`);
+                        if (mediaRes.ok) {
+                            const mediaData = await mediaRes.json();
+                            setMedia(mediaData || []);
+                        }
+                    } catch (e) {
+                        console.error('Failed to fetch media', e);
+                    }
                 } else if (dataArray.length > 0) {
                     setLatestData(dataArray[0]);
                 }
