@@ -288,12 +288,7 @@ export function IoTDevices() {
           <Co2SensorData data={latestData} loading={loading} />
         </div>
         <div>
-          <ThermalCameraFeed 
-            media={cameraData.media} 
-            loading={cameraData.loading} 
-            loadMoreMedia={cameraData.loadMoreMedia}
-            hasMoreMedia={cameraData.mediaHasMore}
-          />
+          <ThermalCameraFeed media={cameraData.media} loading={cameraData.loading} />
         </div>
       </div>
 
