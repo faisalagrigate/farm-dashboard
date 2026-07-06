@@ -65,7 +65,9 @@ export function useIotData(deviceId?: string, initialPage: number = 1, initialLi
                     
                     // Fetch media for this device
                     try {
-                        const mediaRes = await fetch(`${BASE_URL}/iot/media/${deviceId}`);
+                        const mediaRes = await fetch(`${BASE_URL}/iot/media/${deviceId}?limit=25`, {
+                            cache: 'no-store'
+                        });
                         if (mediaRes.ok) {
                             const mediaData = await mediaRes.json();
                             setMedia(mediaData || []);

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import { DataTable } from '../DataTable';
 import { Card } from '../ui/card';
 import { Button } from '../ui/button';
@@ -18,14 +18,24 @@ import {
   CheckCircle,
   Clock,
   MapPin,
-  Wind
+  Wind,
+  Camera,
+  Play,
+  FileSpreadsheet,
+  RefreshCw,
 } from 'lucide-react';
 import { useIotData } from '../../hooks/useIotData';
 import { Co2SensorData } from '../iot/Co2SensorData';
 import { ThermalCameraFeed } from '../iot/ThermalCameraFeed';
+import { DeviceMediaGallery } from '../iot/DeviceMediaGallery';
+
+const BASE_URL = process.env.NEXT_PUBLIC_IOT_API_URL || 'https://dev-iot.agrigate.network';
 
 export function IoTDevices() {
   const [selectedDevice, setSelectedDevice] = useState<any>(null);
+  const [mediaDevice, setMediaDevice] = useState<string | null>(null);
+  const [exportingDeviceId, setExportingDeviceId] = useState<string | null>(null);
+  const [exportingAll, setExportingAll] = useState(false);
 
   // Example device IDs - these would ideally come from your actual device list
   const sensorDeviceId = 'CBFRAN-223';
@@ -40,6 +50,35 @@ export function IoTDevices() {
     setPage
   } = useIotData(undefined, 1, 50); // Fetch 50 to discover unique devices
   const cameraData = useIotData(cameraDeviceId);
+
+  const exportData = useCallback(async (deviceId?: string) => {
+    if (deviceId) setExportingDeviceId(deviceId);
+    else setExportingAll(true);
+
+    try {
+      let url = `${BASE_URL}/iot/data/export`;
+      if (deviceId) url += `?deviceId=${encodeURIComponent(deviceId)}`;
+      const res = await fetch(url);
+      if (!res.ok) throw new Error(`Export failed: ${res.status}`);
+      const blob = await res.blob();
+      const blobUrl = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      const filename = deviceId
+        ? `iot_data_${deviceId}_${new Date().toISOString().slice(0, 10)}.xlsx`
+        : `iot_data_all_${new Date().toISOString().slice(0, 10)}.xlsx`;
+      a.href = blobUrl;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(blobUrl);
+    } catch (e) {
+      alert(`Export failed: ${(e as Error).message}`);
+    } finally {
+      setExportingDeviceId(null);
+      setExportingAll(false);
+    }
+  }, []);
 
   const processedDevices = React.useMemo(() => {
     if (!allData || allData.length === 0) return [];
@@ -66,9 +105,11 @@ export function IoTDevices() {
         deviceMap.set(item.deviceId, {
           id: item.deviceId,
           name: item.deviceId === 'CBFRAN-223' ? 'Shed Monitor Node' :
+            item.deviceId === 'AI23472' ? 'AI Camera Node' :
             item.deviceId === 'test-device-123' ? 'Testing Prototype' : `Node ${item.deviceId}`,
-          type: metrics.Temperature ? 'Weather Monitor' :
-            metrics.CO2 ? 'Humidity' : 'Soil Moisture', // Mapping types based on indicators
+          type: item.deviceId === 'AI23472' ? 'Camera' :
+            metrics.Temperature ? 'Weather Monitor' :
+            metrics.CO2 ? 'Humidity' : 'Soil Moisture',
           location: 'Poultry Shed A',
           status: (new Date().getTime() - new Date(item.timestamp).getTime() < 86400000) ? 'online' : 'offline',
           battery: batteryVoltage > 0 ? Math.min(100, Math.round((batteryVoltage / 12) * 100)) : 85,
@@ -80,8 +121,24 @@ export function IoTDevices() {
       }
     });
 
+    // Camera devices may only upload media without sensor telemetry
+    if (!deviceMap.has(cameraDeviceId) && cameraData.media.length > 0) {
+      deviceMap.set(cameraDeviceId, {
+        id: cameraDeviceId,
+        name: 'AI Camera Node',
+        type: 'Camera',
+        location: 'Poultry Shed A',
+        status: 'online',
+        battery: 96,
+        lastReading: cameraData.media[0]?.timestamp || new Date().toISOString(),
+        value: 'Streaming',
+        connectivity: 'WiFi',
+        firmware: 'v2.1.0',
+      });
+    }
+
     return Array.from(deviceMap.values());
-  }, [allData]);
+  }, [allData, cameraData.media, cameraDeviceId]);
 
   const deviceStats = {
     total: processedDevices.length || 0,
@@ -193,25 +250,29 @@ export function IoTDevices() {
     {
       key: 'actions',
       label: 'Actions',
-      render: (value: any, row: any) => (
-        <div className="flex items-center space-x-2">
-          <Button size="sm" variant="outline" onClick={() => setSelectedDevice(row)}>
-            Edit
-          </Button>
-          {row.type === 'Camera' && (
-            <Button size="sm" variant="outline" onClick={() => console.log('View Camera', row)}>
-              View Camera
-            </Button>
-          )}
-          <Button size="sm" variant="outline" onClick={() => console.log('View Media', row)}>
+      render: (_: any, row: any) => (
+        <div className="flex items-center gap-1.5">
+          <button
+            onClick={() => setMediaDevice(row.id)}
+            title="View media"
+            className="flex items-center gap-1 text-[10px] px-2 py-1 rounded bg-purple-50 hover:bg-purple-100 text-purple-700 transition-colors border border-purple-200"
+          >
+            <Camera className="h-3 w-3" />
             Media
-          </Button>
-          <Button size="sm" variant="outline" onClick={() => {
-            const url = `${process.env.NEXT_PUBLIC_IOT_API_URL || 'http://localhost:8011'}/iot/data/export?deviceId=${row.id}`;
-            window.open(url, '_blank');
-          }}>
+          </button>
+          <button
+            onClick={() => exportData(row.id)}
+            disabled={exportingDeviceId === row.id}
+            title="Export Excel"
+            className="flex items-center gap-1 text-[10px] px-2 py-1 rounded bg-green-50 hover:bg-green-100 text-green-700 transition-colors border border-green-200 disabled:opacity-50"
+          >
+            {exportingDeviceId === row.id ? (
+              <RefreshCw className="h-3 w-3 animate-spin" />
+            ) : (
+              <FileSpreadsheet className="h-3 w-3" />
+            )}
             Export
-          </Button>
+          </button>
         </div>
       )
     }
@@ -219,6 +280,10 @@ export function IoTDevices() {
 
   return (
     <div className="p-4 space-y-4">
+      {mediaDevice && (
+        <DeviceMediaGallery deviceId={mediaDevice} onClose={() => setMediaDevice(null)} />
+      )}
+
       {/* Header */}
       <div className="flex justify-between items-center">
         <div>
@@ -226,11 +291,17 @@ export function IoTDevices() {
           <p className="text-sm text-gray-600">Manage and monitor all smart devices across your farms</p>
         </div>
         <div className="flex space-x-2">
-          <Button size="sm" variant="outline" onClick={() => {
-            const url = `${process.env.NEXT_PUBLIC_IOT_API_URL || 'http://localhost:8011'}/iot/data/export`;
-            window.open(url, '_blank');
-          }}>
-            <Cpu className="h-4 w-4 mr-1" />
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => exportData()}
+            disabled={exportingAll}
+          >
+            {exportingAll ? (
+              <RefreshCw className="h-4 w-4 mr-1 animate-spin" />
+            ) : (
+              <FileSpreadsheet className="h-4 w-4 mr-1" />
+            )}
             Export Data
           </Button>
           <Button size="sm" variant="outline">
@@ -313,7 +384,12 @@ export function IoTDevices() {
           <Co2SensorData data={latestData} loading={loading} />
         </div>
         <div>
-          <ThermalCameraFeed media={cameraData.media} loading={cameraData.loading} />
+          <ThermalCameraFeed
+            media={cameraData.media}
+            loading={cameraData.loading}
+            loadMoreMedia={cameraData.loadMoreMedia}
+            hasMoreMedia={cameraData.mediaHasMore}
+          />
         </div>
       </div>
 
@@ -369,7 +445,7 @@ export function IoTDevices() {
                 { type: 'Weather Monitor', count: processedDevices.filter(d => d.type === 'Weather Monitor').length, color: 'bg-green-100 text-green-800' },
                 { type: 'Humidity', count: processedDevices.filter(d => d.type === 'Humidity').length, color: 'bg-orange-100 text-orange-800' },
                 { type: 'Soil Moisture', count: processedDevices.filter(d => d.type === 'Soil Moisture').length, color: 'bg-blue-100 text-blue-800' },
-                { type: 'Camera', count: cameraData.media.length > 0 ? 1 : 0, color: 'bg-purple-100 text-purple-800' }
+                { type: 'Camera', count: processedDevices.filter(d => d.type === 'Camera').length || (cameraData.media.length > 0 ? 1 : 0), color: 'bg-purple-100 text-purple-800' }
               ].map((item, index) => (
                 <div key={index} className="flex justify-between items-center text-xs">
                   <span>{item.type}</span>
@@ -399,6 +475,40 @@ export function IoTDevices() {
                   </div>
                 </div>
               ))}
+            </div>
+          </Card>
+
+          <Card className="p-4">
+            <h3 className="text-base font-semibold mb-3 flex items-center gap-2">
+              <Camera className="h-4 w-4 text-purple-600" />
+              Camera Devices
+            </h3>
+            <div className="space-y-2">
+              {processedDevices.filter(d => d.type === 'Camera').length === 0 ? (
+                <button
+                  onClick={() => setMediaDevice(cameraDeviceId)}
+                  className="w-full flex items-center justify-center gap-2 text-xs px-3 py-2 rounded-lg bg-purple-600 hover:bg-purple-700 text-white transition-colors"
+                >
+                  <Camera className="h-3.5 w-3.5" />
+                  View {cameraDeviceId} Media
+                </button>
+              ) : (
+                processedDevices.filter(d => d.type === 'Camera').map(device => (
+                  <div key={device.id} className="flex items-center justify-between p-2 rounded-lg bg-purple-50 border border-purple-100">
+                    <div>
+                      <p className="text-xs font-mono font-medium text-purple-900">{device.id}</p>
+                      <p className="text-[10px] text-purple-600">{device.name}</p>
+                    </div>
+                    <button
+                      onClick={() => setMediaDevice(device.id)}
+                      className="flex items-center gap-1 text-[10px] px-2.5 py-1.5 rounded-lg bg-purple-600 hover:bg-purple-700 text-white transition-colors font-medium"
+                    >
+                      <Play className="h-3 w-3" />
+                      View
+                    </button>
+                  </div>
+                ))
+              )}
             </div>
           </Card>
 
