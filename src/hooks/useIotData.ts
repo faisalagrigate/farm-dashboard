@@ -8,8 +8,26 @@ export function useIotData(deviceId?: string, initialPage: number = 1, initialLi
     const [allData, setAllData] = useState<any[]>([]);
     const [pagination, setPagination] = useState({ total: 0, page: initialPage, limit: initialLimit });
     const [media, setMedia] = useState<any[]>([]);
+    const [mediaPage, setMediaPage] = useState(1);
+    const [mediaHasMore, setMediaHasMore] = useState(true);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
+
+    const loadMoreMedia = async () => {
+        if (!deviceId || !mediaHasMore) return;
+        try {
+            const nextPage = mediaPage + 1;
+            const res = await fetch(`${BASE_URL}/iot/media/${deviceId}?page=${nextPage}&limit=25`);
+            if (res.ok) {
+                const newData = await res.json();
+                if (newData.length < 25) setMediaHasMore(false);
+                setMedia(prev => [...prev, ...newData]);
+                setMediaPage(nextPage);
+            }
+        } catch (e) {
+            console.error('Failed to load more media', e);
+        }
+    };
 
     const fetchData = async (page: number = pagination.page, limit: number = pagination.limit) => {
         try {
@@ -51,6 +69,8 @@ export function useIotData(deviceId?: string, initialPage: number = 1, initialLi
                         if (mediaRes.ok) {
                             const mediaData = await mediaRes.json();
                             setMedia(mediaData || []);
+                            setMediaPage(1);
+                            setMediaHasMore((mediaData || []).length === 25);
                         }
                     } catch (e) {
                         console.error('Failed to fetch media', e);
@@ -83,6 +103,8 @@ export function useIotData(deviceId?: string, initialPage: number = 1, initialLi
         allData,
         pagination,
         media,
+        mediaHasMore,
+        loadMoreMedia,
         loading,
         error,
         refetch: fetchData,

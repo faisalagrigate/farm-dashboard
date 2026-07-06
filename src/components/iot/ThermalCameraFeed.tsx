@@ -5,10 +5,19 @@ import { Play, Image as ImageIcon, Camera } from 'lucide-react';
 interface ThermalCameraFeedProps {
     media: any[];
     loading: boolean;
+    loadMoreMedia?: () => void;
+    hasMoreMedia?: boolean;
 }
 
-export function ThermalCameraFeed({ media, loading }: ThermalCameraFeedProps) {
+export function ThermalCameraFeed({ media, loading, loadMoreMedia, hasMoreMedia }: ThermalCameraFeedProps) {
     const [selectedMedia, setSelectedMedia] = useState<any>(null);
+
+    const handleScroll = (e: React.UIEvent<HTMLDivElement>) => {
+        const bottom = e.currentTarget.scrollHeight - e.currentTarget.scrollTop <= e.currentTarget.clientHeight + 10;
+        if (bottom && hasMoreMedia && loadMoreMedia) {
+            loadMoreMedia();
+        }
+    };
 
     if (loading && media.length === 0) return <div className="animate-pulse h-64 bg-gray-100 rounded-lg"></div>;
 
@@ -47,7 +56,10 @@ export function ThermalCameraFeed({ media, loading }: ThermalCameraFeedProps) {
                 )}
             </div>
 
-            <div className="grid grid-cols-5 gap-2">
+            <div 
+                className="grid grid-cols-5 gap-2 max-h-64 overflow-y-auto pr-2"
+                onScroll={handleScroll}
+            >
                 {media.map((item, idx) => (
                     <button
                         key={item._id}
@@ -67,6 +79,11 @@ export function ThermalCameraFeed({ media, loading }: ThermalCameraFeedProps) {
                         )}
                     </button>
                 ))}
+                {hasMoreMedia && (
+                    <div className="col-span-5 flex justify-center py-2 text-xs text-gray-500">
+                        Loading more...
+                    </div>
+                )}
             </div>
         </Card>
     );
