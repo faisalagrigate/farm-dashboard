@@ -189,6 +189,31 @@ export function IoTDevices() {
           <span className="text-xs">{value}</span>
         </div>
       )
+    },
+    {
+      key: 'actions',
+      label: 'Actions',
+      render: (value: any, row: any) => (
+        <div className="flex items-center space-x-2">
+          <Button size="sm" variant="outline" onClick={() => setSelectedDevice(row)}>
+            Edit
+          </Button>
+          {row.type === 'Camera' && (
+            <Button size="sm" variant="outline" onClick={() => console.log('View Camera', row)}>
+              View Camera
+            </Button>
+          )}
+          <Button size="sm" variant="outline" onClick={() => console.log('View Media', row)}>
+            Media
+          </Button>
+          <Button size="sm" variant="outline" onClick={() => {
+            const url = `${process.env.NEXT_PUBLIC_IOT_API_URL || 'http://localhost:8011'}/iot/data/export?deviceId=${row.id}`;
+            window.open(url, '_blank');
+          }}>
+            Export
+          </Button>
+        </div>
+      )
     }
   ];
 
