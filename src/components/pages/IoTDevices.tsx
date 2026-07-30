@@ -25,11 +25,11 @@ import {
   RefreshCw,
 } from 'lucide-react';
 import { useIotData } from '../../hooks/useIotData';
+import { exportIotDataToExcel } from '../../lib/exportIotExcel';
 import { Co2SensorData } from '../iot/Co2SensorData';
 import { ThermalCameraFeed } from '../iot/ThermalCameraFeed';
 import { DeviceMediaGallery } from '../iot/DeviceMediaGallery';
-
-const BASE_URL = process.env.NEXT_PUBLIC_IOT_API_URL || 'https://dev-iot.agrigate.network';
+import { AutomationControls } from '../iot/AutomationControls';
 
 export function IoTDevices() {
   const [selectedDevice, setSelectedDevice] = useState<any>(null);
@@ -40,6 +40,7 @@ export function IoTDevices() {
   // Example device IDs - these would ideally come from your actual device list
   const sensorDeviceId = 'CBFRAN-223';
   const cameraDeviceId = 'AI23472';
+  const controlDeviceId = process.env.NEXT_PUBLIC_IOT_CONTROL_DEVICE_ID || sensorDeviceId;
 
   const {
     latestData,
@@ -56,22 +57,8 @@ export function IoTDevices() {
     else setExportingAll(true);
 
     try {
-      let url = `${BASE_URL}/iot/data/export`;
-      if (deviceId) url += `?deviceId=${encodeURIComponent(deviceId)}`;
-      const res = await fetch(url);
-      if (!res.ok) throw new Error(`Export failed: ${res.status}`);
-      const blob = await res.blob();
-      const blobUrl = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      const filename = deviceId
-        ? `iot_data_${deviceId}_${new Date().toISOString().slice(0, 10)}.xlsx`
-        : `iot_data_all_${new Date().toISOString().slice(0, 10)}.xlsx`;
-      a.href = blobUrl;
-      a.download = filename;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(blobUrl);
+      // Client-side Excel export — live /iot/data/export is not deployed yet (404).
+      await exportIotDataToExcel(deviceId);
     } catch (e) {
       alert(`Export failed: ${(e as Error).message}`);
     } finally {
@@ -390,6 +377,17 @@ export function IoTDevices() {
             loadMoreMedia={cameraData.loadMoreMedia}
             hasMoreMedia={cameraData.mediaHasMore}
           />
+        </div>
+      </div>
+
+      {/* Fan / Light Automation (MQTT pub/sub) */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        <div className="lg:col-span-1">
+          <h2 className="text-sm font-semibold mb-3 flex items-center">
+            <Wind className="h-4 w-4 mr-2 text-lime-500" />
+            Fan &amp; Light Controls
+          </h2>
+          <AutomationControls deviceId={controlDeviceId} />
         </div>
       </div>
 
