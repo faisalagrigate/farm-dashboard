@@ -1,18 +1,17 @@
 "use client";
 
-import React, { useCallback, useEffect, useState } from 'react';
-import { Clock, Loader2, Lock, LogOut, RefreshCw, Wifi, WifiOff } from 'lucide-react';
+import React, { useCallback, useEffect, useState } from "react";
+import { Clock, Loader2, RefreshCw, Wifi, WifiOff } from "lucide-react";
 import {
   CONTROL_CHANNELS,
   CONTROL_LABELS,
   ControlChannel,
   DeviceControls,
+  clearControlToken,
   fetchDeviceControls,
   getControlToken,
-  loginIoT,
-  logoutIoT,
   setDeviceControl,
-} from '../../lib/iotControl';
+} from "../../lib/iotControl";
 
 const DEFAULT_CONTROLS: DeviceControls = {
   light1: false,
@@ -24,39 +23,43 @@ const DEFAULT_CONTROLS: DeviceControls = {
 
 interface AutomationControlsProps {
   deviceId: string;
+  onSessionExpired?: () => void;
 }
 
 function formatLastReported(iso?: string | null) {
-  if (!iso) return '—';
+  if (!iso) return "—";
   const diff = Date.now() - new Date(iso).getTime();
-  if (diff < 15_000) return 'Just now';
+  if (diff < 15_000) return "Just now";
   if (diff < 60_000) return `${Math.floor(diff / 1000)}s ago`;
   if (diff < 3_600_000) return `${Math.floor(diff / 60_000)}m ago`;
   return new Date(iso).toLocaleTimeString();
 }
 
-export function AutomationControls({ deviceId }: AutomationControlsProps) {
-  const [authed, setAuthed] = useState(false);
-  const [username, setUsername] = useState('');
-  const [password, setPassword] = useState('');
-  const [loginError, setLoginError] = useState<string | null>(null);
-  const [loggingIn, setLoggingIn] = useState(false);
-
+export function AutomationControls({
+  deviceId,
+  onSessionExpired,
+}: AutomationControlsProps) {
   const [controls, setControls] = useState<DeviceControls>(DEFAULT_CONTROLS);
   const [loading, setLoading] = useState(true);
   const [online, setOnline] = useState(false);
   const [lastReported, setLastReported] = useState<string | null>(null);
-  const [pending, setPending] = useState<Partial<Record<ControlChannel, boolean>>>({});
+  const [pending, setPending] = useState<Partial<Record<ControlChannel, boolean>>>(
+    {},
+  );
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    setAuthed(!!getControlToken());
-  }, []);
+  const expireSession = useCallback(() => {
+    clearControlToken();
+    onSessionExpired?.();
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(new Event("iot-auth-expired"));
+    }
+  }, [onSessionExpired]);
 
   const load = useCallback(async () => {
     if (!getControlToken()) {
-      setAuthed(false);
       setLoading(false);
+      expireSession();
       return;
     }
     try {
@@ -65,48 +68,23 @@ export function AutomationControls({ deviceId }: AutomationControlsProps) {
       setControls({ ...DEFAULT_CONTROLS, ...result.controls });
       setOnline(true);
       setLastReported(new Date().toISOString());
-      setAuthed(true);
     } catch (e: any) {
-      if (e.message === 'Login required') {
-        setAuthed(false);
+      if (e.message === "Login required") {
+        expireSession();
       } else {
         setOnline(false);
-        setError(e.message || 'Failed to load controls');
+        setError(e.message || "Failed to load controls");
       }
     } finally {
       setLoading(false);
     }
-  }, [deviceId]);
+  }, [deviceId, expireSession]);
 
   useEffect(() => {
-    if (!authed) return;
     load();
     const interval = setInterval(load, 15_000);
     return () => clearInterval(interval);
-  }, [authed, load]);
-
-  const handleLogin = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setLoggingIn(true);
-    setLoginError(null);
-    try {
-      await loginIoT(username.trim(), password);
-      setPassword('');
-      setAuthed(true);
-      setLoading(true);
-    } catch (err: any) {
-      setLoginError(err.message || 'Login failed');
-      setAuthed(false);
-    } finally {
-      setLoggingIn(false);
-    }
-  };
-
-  const handleLogout = async () => {
-    await logoutIoT();
-    setAuthed(false);
-    setControls(DEFAULT_CONTROLS);
-  };
+  }, [load]);
 
   const toggle = async (channel: ControlChannel, next: boolean) => {
     const prev = controls[channel];
@@ -121,10 +99,10 @@ export function AutomationControls({ deviceId }: AutomationControlsProps) {
       setLastReported(new Date().toISOString());
     } catch (e: any) {
       setControls((c) => ({ ...c, [channel]: prev }));
-      if (e.message === 'Login required') {
-        setAuthed(false);
+      if (e.message === "Login required") {
+        expireSession();
       } else {
-        setError(e.message || 'Failed to toggle control');
+        setError(e.message || "Failed to toggle control");
       }
     } finally {
       setPending((p) => {
@@ -134,56 +112,6 @@ export function AutomationControls({ deviceId }: AutomationControlsProps) {
       });
     }
   };
-
-  if (!authed) {
-    return (
-      <div className="rounded-xl overflow-hidden border border-zinc-700 shadow-lg">
-        <div className="bg-[#7CFC00] px-4 py-3 text-black">
-          <h2 className="text-lg font-bold leading-tight flex items-center gap-2">
-            <Lock className="h-4 w-4" />
-            Automation Login
-          </h2>
-          <p className="text-xs mt-1 opacity-80">Sign in to control fans &amp; lights</p>
-        </div>
-        <form onSubmit={handleLogin} className="bg-[#2a2a2a] px-4 py-6 space-y-4">
-          <div>
-            <label className="block text-xs text-zinc-400 mb-1.5">Username</label>
-            <input
-              type="text"
-              autoComplete="username"
-              value={username}
-              onChange={(e) => setUsername(e.target.value)}
-              className="w-full rounded-lg bg-zinc-900 border border-zinc-600 text-white px-3 py-2 text-sm outline-none focus:border-[#7CFC00]"
-              placeholder="Username"
-              required
-            />
-          </div>
-          <div>
-            <label className="block text-xs text-zinc-400 mb-1.5">Password</label>
-            <input
-              type="password"
-              autoComplete="current-password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              className="w-full rounded-lg bg-zinc-900 border border-zinc-600 text-white px-3 py-2 text-sm outline-none focus:border-[#7CFC00]"
-              placeholder="Password"
-              required
-            />
-          </div>
-          {loginError && (
-            <p className="text-xs text-red-400">{loginError}</p>
-          )}
-          <button
-            type="submit"
-            disabled={loggingIn}
-            className="w-full rounded-lg bg-[#7CFC00] hover:bg-[#6de000] text-black font-semibold text-sm py-2.5 disabled:opacity-60"
-          >
-            {loggingIn ? 'Signing in…' : 'Login'}
-          </button>
-        </form>
-      </div>
-    );
-  }
 
   return (
     <div className="rounded-xl overflow-hidden border border-zinc-700 shadow-lg">
@@ -198,7 +126,7 @@ export function AutomationControls({ deviceId }: AutomationControlsProps) {
                 ) : (
                   <WifiOff className="h-3.5 w-3.5" />
                 )}
-                {online ? 'Online' : 'Offline'}
+                {online ? "Online" : "Offline"}
               </span>
               <span className="inline-flex items-center gap-1.5 opacity-80">
                 <Clock className="h-3.5 w-3.5" />
@@ -206,24 +134,14 @@ export function AutomationControls({ deviceId }: AutomationControlsProps) {
               </span>
             </div>
           </div>
-          <div className="flex items-center gap-1">
-            <button
-              type="button"
-              onClick={load}
-              className="rounded-lg bg-black/10 hover:bg-black/20 p-2 transition-colors"
-              title="Refresh"
-            >
-              <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
-            </button>
-            <button
-              type="button"
-              onClick={handleLogout}
-              className="rounded-lg bg-black/10 hover:bg-black/20 p-2 transition-colors"
-              title="Logout"
-            >
-              <LogOut className="h-4 w-4" />
-            </button>
-          </div>
+          <button
+            type="button"
+            onClick={load}
+            className="rounded-lg bg-black/10 hover:bg-black/20 p-2 transition-colors"
+            title="Refresh"
+          >
+            <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
+          </button>
         </div>
         <p className="mt-1 text-[11px] font-mono opacity-70">{deviceId}</p>
       </div>
@@ -245,18 +163,18 @@ export function AutomationControls({ deviceId }: AutomationControlsProps) {
                     type="button"
                     disabled={busy}
                     aria-pressed={on}
-                    aria-label={`${CONTROL_LABELS[channel]} ${on ? 'on' : 'off'}`}
+                    aria-label={`${CONTROL_LABELS[channel]} ${on ? "on" : "off"}`}
                     onClick={() => toggle(channel, !on)}
                     className={`
                       relative h-8 w-[4.5rem] rounded-full transition-colors duration-200
                       disabled:opacity-60
-                      ${on ? 'bg-zinc-900' : 'bg-zinc-800'}
+                      ${on ? "bg-zinc-900" : "bg-zinc-800"}
                     `}
                   >
                     <span
                       className={`
                         absolute top-1 h-6 w-6 rounded-full shadow transition-all duration-200
-                        ${on ? 'left-1 bg-[#7CFC00]' : 'left-[calc(100%-1.75rem)] bg-zinc-500'}
+                        ${on ? "left-1 bg-[#7CFC00]" : "left-[calc(100%-1.75rem)] bg-zinc-500"}
                       `}
                     />
                     {busy && (

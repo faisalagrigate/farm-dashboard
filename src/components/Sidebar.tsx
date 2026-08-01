@@ -16,15 +16,17 @@ import {
   Wrench,
   Users,
   DollarSign,
-  Bird
+  Bird,
+  LogOut,
 } from 'lucide-react';
 
 interface SidebarProps {
   activeTab: string;
   onTabChange: (tab: string) => void;
+  onLogout?: () => void;
 }
 
-export function Sidebar({ activeTab, onTabChange }: SidebarProps) {
+export function Sidebar({ activeTab, onTabChange, onLogout }: SidebarProps) {
   const menuItems = [
         { id: 'poultry', label: 'Agrigate Poultry AI', icon: Bird, color: 'text-purple-600' },
 
@@ -41,7 +43,7 @@ export function Sidebar({ activeTab, onTabChange }: SidebarProps) {
   ];
 
   return (
-    <aside className="w-64 bg-white shadow-lg border-r border-gray-200">
+    <aside className="w-64 bg-white shadow-lg border-r border-gray-200 flex flex-col h-full">
       <div className="p-4 border-b border-gray-200">
         <div className="flex items-center space-x-2">
           <Leaf className="h-8 w-8 text-green-600" />
@@ -52,7 +54,7 @@ export function Sidebar({ activeTab, onTabChange }: SidebarProps) {
         </div>
       </div>
       
-      <nav className="mt-2">
+      <nav className="mt-2 flex-1">
         {menuItems.map((item) => {
           const Icon = item.icon;
           const isActive = activeTab === item.id;
@@ -73,6 +75,19 @@ export function Sidebar({ activeTab, onTabChange }: SidebarProps) {
           );
         })}
       </nav>
+
+      {onLogout && (
+        <div className="p-3 border-t border-gray-200">
+          <button
+            type="button"
+            onClick={onLogout}
+            className="w-full flex items-center px-3 py-2.5 text-sm text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+          >
+            <LogOut className="h-4 w-4 mr-3" />
+            Logout
+          </button>
+        </div>
+      )}
     </aside>
   );
 }
