@@ -1,5 +1,9 @@
-const BASE_URL = process.env.NEXT_PUBLIC_IOT_API_URL || 'https://dev-iot.agrigate.network';
-const TOKEN_KEY = 'iot_control_token';
+const BASE_URL =
+  process.env.NEXT_PUBLIC_IOT_API_URL ||
+  (process.env.NODE_ENV === "development"
+    ? "http://localhost:8004"
+    : "https://dev-iot.agrigate.network");
+const TOKEN_KEY = "iot_control_token";
 
 export const CONTROL_CHANNELS = [
   'light1',

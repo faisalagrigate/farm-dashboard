@@ -60,10 +60,12 @@ import {
 } from 'recharts';
 
 import { useIotData } from '../../hooks/useIotData';
+import { classifyBroilerHeatStress } from '../../lib/broilerHeatStress';
 
 export function PoultryMonitoring() {
   const [selectedFarm, setSelectedFarm] = useState('Farm-1');
   const [selectedShed, setSelectedShed] = useState('Shed-A');
+  const [broilerAgeDays, setBroilerAgeDays] = useState<number>(21);
 
   const {
     latestData: iotData,
@@ -157,22 +159,38 @@ export function PoultryMonitoring() {
       const hasRealMetrics = Object.values(metrics).some((m: any) => m.value > 0);
 
       if (!devices.has(item.deviceId) && (!isTestDevice || hasRealMetrics)) {
-        const temp = metrics.Temperature?.value || metrics.temp?.value || 0;
-        const humidity = metrics.RH?.value || 0;
+        const tempC = metrics.Temperature?.value ?? metrics.temp?.value ?? null;
+        const rhPercent = metrics.RH?.value ?? null;
+
+        const heat = classifyBroilerHeatStress(
+          tempC === null || tempC === undefined || Number.isNaN(Number(tempC))
+            ? null
+            : Number(tempC),
+          rhPercent === null || rhPercent === undefined || Number.isNaN(Number(rhPercent))
+            ? null
+            : Number(rhPercent),
+          broilerAgeDays,
+        );
+
+        const temp = tempC ?? 0;
+        const humidity = rhPercent ?? 0;
         const nh3 = metrics.NH3?.value || 0;
         const co2 = metrics.CO2?.value || 0;
         const batteryVal = metrics['Battery Voltage']?.value || metrics.Battery?.value || 0;
 
         devices.set(item.deviceId, [
           {
-            id: `${item.deviceId}-TEMP`,
+            id: `${item.deviceId}-HEAT`,
             shed: item.deviceId === 'CBFRAN-223' ? 'Shed A' : 'Shed B',
             zone: 'Zone 1',
-            type: 'Temperature',
-            value: temp,
+            type: 'Heat Stress',
+            value: heat.thiC === null ? '--' : Math.round(heat.thiC * 10) / 10,
             unit: '°C',
-            status: temp > 30 ? 'critical' : temp > 28 ? 'warning' : 'optimal',
-            threshold: '26-30°C',
+            status: heat.severity,
+            threshold:
+              heat.thiC === null
+                ? 'Need Temperature + RH to compute THI'
+                : `THI (${heat.thresholds.bandLabel}) warn>${heat.thresholds.warningThresholdC}°C, critical>${heat.thresholds.criticalThresholdC}°C`,
             lastUpdate: 'Just now',
             battery: Math.min(100, Math.round((batteryVal / 12) * 100))
           }
@@ -186,8 +204,8 @@ export function PoultryMonitoring() {
             type: 'Humidity',
             value: humidity,
             unit: '%',
-            status: humidity > 70 ? 'warning' : 'optimal',
-            threshold: '50-70%',
+            status: 'optimal',
+            threshold: 'Used for THI (Heat Index)',
             lastUpdate: 'Just now',
             battery: Math.min(100, Math.round((batteryVal / 12) * 100))
           });
@@ -225,7 +243,7 @@ export function PoultryMonitoring() {
     });
 
     return Array.from(devices.values()).flat();
-  }, [iotAllData]);
+  }, [iotAllData, broilerAgeDays]);
 
   // Water Quality Sensors
   const waterQualityData = [
@@ -632,6 +650,21 @@ export function PoultryMonitoring() {
             <option value="Shed-C">Shed C</option>
             <option value="All">All Sheds</option>
           </select>
+          <div className="flex items-center space-x-2">
+            <input
+              type="number"
+              min={1}
+              max={42}
+              value={broilerAgeDays}
+              onChange={(e) => {
+                const v = Number(e.target.value);
+                if (!Number.isFinite(v)) return;
+                setBroilerAgeDays(Math.min(42, Math.max(1, v)));
+              }}
+              className="px-3 py-2 border border-gray-300 rounded-lg text-sm w-24"
+            />
+            <span className="text-xs text-gray-500">days old</span>
+          </div>
           <Button size="sm" className="bg-blue-600 hover:bg-blue-700">
             <Activity className="h-4 w-4 mr-2" />
             Live Dashboard
@@ -896,11 +929,12 @@ export function PoultryMonitoring() {
                   <div key={sensor.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
                     <div className="flex items-center space-x-3 flex-1">
                       <div className={`p-2 rounded-lg ${sensor.type === 'Temperature' ? 'bg-red-100' :
+                        sensor.type === 'Heat Stress' ? 'bg-red-100' :
                         sensor.type === 'Humidity' ? 'bg-blue-100' :
                           sensor.type === 'Ammonia' ? 'bg-orange-100' :
                             'bg-gray-100'
                         }`}>
-                        {sensor.type === 'Temperature' && <Thermometer className="h-4 w-4 text-red-600" />}
+                        {sensor.type === 'Heat Stress' && <Thermometer className="h-4 w-4 text-red-600" />}
                         {sensor.type === 'Humidity' && <Droplets className="h-4 w-4 text-blue-600" />}
                         {sensor.type === 'Ammonia' && <Wind className="h-4 w-4 text-orange-600" />}
                         {sensor.type === 'CO2' && <CloudRain className="h-4 w-4 text-gray-600" />}
